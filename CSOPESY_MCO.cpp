@@ -4,166 +4,302 @@
 #include <ctime>
 #include <regex>
 #include <vector>
+#include <map>
+#include <memory>
+#include <algorithm>
 
 using namespace std;
 
-struct screenConsole{
-    std::string processName;
+class Screen {
+private:
+    string processName;
+    int currentLine;
     int totalLines;
-    std::string creationDate;
+    string creationDate;
+    bool isActive;
+
+public:
+    Screen(const string& name) : processName(name), currentLine(1), totalLines(100), isActive(true) {
+        time_t t = time(nullptr);
+        tm* now = localtime(&t);
+        char timeBuffer[100];
+        strftime(timeBuffer, sizeof(timeBuffer), "%m/%d/%Y, %I:%M:%S %p", now);
+        creationDate = string(timeBuffer);
+    }
+
+    void display() {
+        cout << "\n==============================" << endl;
+        cout << "Process Name: " << processName << endl;
+        cout << "Current line of instruction: " << currentLine << " / " << totalLines << endl;
+        cout << "Created on: " << creationDate << endl;
+        cout << "==============================" << endl;
+        cout << "\033[33m(Type 'exit' to return to main menu)\033[0m" << endl;
+    }
+
+    void simulateProgress() {
+        if (currentLine < totalLines) {
+            currentLine++;
+        }
+    }
+
+    // Getters
+    string getName() const { return processName; }
+    int getCurrentLine() const { return currentLine; }
+    int getTotalLines() const { return totalLines; }
+    string getCreationDate() const { return creationDate; }
+    bool getIsActive() const { return isActive; }
+
+    // Setters
+    void setActive(bool active) { isActive = active; }
 };
 
-void clearScreen() {
-    #ifdef _WIN32
-        std::system("cls");
-    #else
-        std::system("clear");
-    #endif
-}
+class ConsoleManager {
+private:
+    map<string, shared_ptr<Screen>> screens;
+    shared_ptr<Screen> currentScreen;
+    bool inMainMenu;
 
-void commandHelp() {
-    cout << "\n\033[32m=== CSOPESY Command Help ===\033[0m\n";
-    cout << "  initialize     - Do Something\n";
-    cout << "  screen         - Do Something\n";
-    cout << "  scheduler-test - Do Something\n";
-    cout << "  scheduler-stop - Do Something\n";
-    cout << "  report-util    - Do Something\n";
-    cout << "  clear          - Do Something\n";
-    cout << "  help           - Do Something\n";
-    cout << "  exit           - Do Something\n";
-}
-
-void printHeader() {
-    cout << "   ___________ ____  ____  _____________  __\n";
-    cout << "  / ____/ ___// __ \\/ __ \\/ ____/ ___/\\ \\/ /\n";
-    cout << " / /    \\__ \\/ / / / /_/ / __/  \\__ \\  \\  /\n";
-    cout << "/ /___ ___/ / /_/ / ____/ /___ ___/ /  / /\n";
-    cout << "\\____//____/\\____/_/   /_____//____/  /_/\n";
-    cout << "\033[32m      Welcome to CSOPESY Command Line\033[0m\n\n";
-}
-
-void commandInitialize() {
-    cout << "initialize command recognized. Doing something." << std::endl;
-}
-
-std::string extractName(const std::string& command) {
-    std::regex pattern(R"(screen\s+-[rs]\s+(\S+))");
-    std::smatch match;
-    if (std::regex_search(command, match, pattern) && match.size() > 1) {
-        return match[1];
+    string extractName(const string& command) {
+        regex pattern(R"(screen\s+-[rs]\s+(\S+))");
+        smatch match;
+        if (regex_search(command, match, pattern) && match.size() > 1) {
+            return match[1];
+        }
+        return "";
     }
-    return "";
-}
 
-void printScreenConsole(const std::string& processName, std::vector<screenConsole>& vec2){
-    for(const auto& process : vec2) {
-        if (process.processName == processName) {
-            cout << std::endl;
-            cout << "==============================" << std::endl;
-            cout << "Process Name: "<< process.processName << std::endl;
-            cout << "Total lines of instruction: " << process.totalLines <<std::endl;
-            cout << "Created on: "<< process.creationDate << std::endl;
-            cout << "==============================" << std::endl;
-            cout << std::endl;
+    bool findCommand(const string& text, const string& command) {
+        return text.find(command) != string::npos;
+    }
+
+public:
+    ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {}
+
+    void clearScreen() {
+        #ifdef _WIN32
+        system("cls");
+        #else
+        system("clear");
+        #endif
+    }
+
+    void printHeader() {
+        cout << "   ___________ ____  ____  _____________  __\n";
+        cout << "  / ____/ ___// __ \\/ __ \\/ ____/ ___/\\ \\/ /\n";
+        cout << " / /    \\__ \\/ / / / /_/ / __/  \\__ \\  \\  /\n";
+        cout << "/ /___ ___/ / /_/ / ____/ /___ ___/ /  / /\n";
+        cout << "\\____//____/\\____/_/   /_____//____/  /_/\n";
+        cout << "\033[32m      Welcome to CSOPESY Command Line\033[0m\n\n";
+    }
+
+    void commandHelp() {
+        if (inMainMenu) {
+            cout << "\n\033[32m=== CSOPESY Command Help ===\033[0m\n";
+            cout << "  initialize     - Initialize the system\n";
+            cout << "  screen -s <n>  - Create a new screen session\n";
+            cout << "  screen -r <n>  - Resume an existing screen session\n";
+            cout << "  screen -ls     - List all screen sessions\n";
+            cout << "  scheduler-test - Run scheduler test\n";
+            cout << "  scheduler-stop - Stop scheduler\n";
+            cout << "  report-util    - Generate report\n";
+            cout << "  clear          - Clear the screen\n";
+            cout << "  help           - Show this help menu\n";
+            cout << "  exit           - Exit the application\n";
+        } else {
+            cout << "\n\033[32m=== Screen Session Help ===\033[0m\n";
+            cout << "  exit - Return to main menu\n";
+            cout << "  help - Show this help menu\n";
+            cout << "  Any other command will simulate process execution\n";
         }
     }
-}
 
-void commandScreen(const std::string& command, const std::string& processName, std::vector<screenConsole>& vec2) {
-    std::time_t t = std::time(nullptr);
-    std::tm* now = std::localtime(&t);
-    char time[100];
-    std::strftime(time, sizeof(time), "%m/%d/%Y, %I:%M:%S %p", now);
-
-    vec2.push_back({processName, 0, time});
-    printScreenConsole(processName, vec2);
-}
-
-void commandSchedulerTest() {
-    cout << "scheduler-test command recognized. Doing something." << std::endl;
-}
-
-void commandSchedulerStop() {
-    cout << "scheduler-stop command recognized. Doing something." << std::endl;
-}
-
-void commandReportUtil() {
-    cout << "report-util command recognized. Doing something." << std::endl;
-}
-
-void commandClear() {
-    cout << "clear command recognized. Clearing screen." << std::endl;
-    clearScreen();
-    printHeader();
-}
-
-void commandExit() {
-    cout << "exit command recognized. Closing application." << std::endl;
-    exit(0);
-}
-
-bool findCommand(const std::string& text, const std::string& command) {
-    return text.find(command) != std::string::npos;
-}
-
-// void printVector(const std::vector<std::string>& vec) {
-//     for (const auto& str : vec) {
-//         std::cout << str << std::endl;
-//     }
-// }
-
-void processCommand(const std::string& command, std::vector<std::string>& vec, std::vector<screenConsole>& vec2) {
-    if (findCommand(command, "initialize")) {
+    void commandInitialize() {
+        cout << "initialize command recognized. System initialized." << endl;
     }
-    else if (findCommand(command, "screen -r") || findCommand(command, "screen -s")) {
-        std::string processName = extractName(command);
-        if(std::find(vec.begin(), vec.end(), processName) != vec.end()){
-            printScreenConsole(processName, vec2);
-        } 
+
+    void commandSchedulerTest() {
+        cout << "scheduler-test command recognized. Running scheduler test." << endl;
+    }
+
+    void commandSchedulerStop() {
+        cout << "scheduler-stop command recognized. Scheduler stopped." << endl;
+    }
+
+    void commandReportUtil() {
+        cout << "report-util command recognized. Generating report." << endl;
+    }
+
+    void commandClear() {
+        cout << "clear command recognized. Clearing screen." << endl;
+        clearScreen();
+        printHeader();
+        if (!inMainMenu && currentScreen) {
+            currentScreen->display();
+        }
+    }
+
+    void commandExit() {
+        if (inMainMenu) {
+            cout << "exit command recognized. Closing application." << endl;
+            exit(0);
+        } else {
+            cout << "Returning to main menu..." << endl;
+            currentScreen = nullptr;
+            inMainMenu = true;
+            clearScreen();
+            printHeader();
+        }
+    }
+
+    void createScreen(const string& name) {
+        auto screen = make_shared<Screen>(name);
+        screens[name] = screen;
+        currentScreen = screen;
+        inMainMenu = false;
+
+        clearScreen();
+        cout << "Screen session '" << name << "' created successfully." << endl;
+        screen->display();
+    }
+
+    void resumeScreen(const string& name) {
+        auto it = screens.find(name);
+        if (it != screens.end()) {
+            currentScreen = it->second;
+            inMainMenu = false;
+
+            clearScreen();
+            cout << "Resuming screen session '" << name << "'..." << endl;
+            currentScreen->display();
+        } else {
+            cout << "Screen '" << name << "' not found." << endl;
+        }
+    }
+
+    void listScreens() {
+        if (screens.empty()) {
+            cout << "No screen sessions found." << endl;
+            return;
+        }
+
+        cout << "\n\033[32m=== Active Screen Sessions ===\033[0m\n";
+        for (const auto& pair : screens) {
+            cout << "  • " << pair.first << " (Created: " << pair.second->getCreationDate() << ")" << endl;
+        }
+        cout << endl;
+    }
+
+    void handleScreenCommand(const string& command) {
+        string processName = extractName(command);
+        
+        if (processName.empty()) {
+            cout << "Invalid screen command format." << endl;
+            cout << "Usage: screen -s <name> or screen -r <name>" << endl;
+            return;
+        }
+
+        auto it = screens.find(processName);
+        
+        if (findCommand(command, "screen -s")) {
+            if (it != screens.end()) {
+                cout << "Screen '" << processName << "' already exists. Use 'screen -r " << processName << "' to resume." << endl;
+            } else {
+                createScreen(processName);
+            }
+        }
+        else if (findCommand(command, "screen -r")) {
+            if (it != screens.end()) {
+                resumeScreen(processName);
+            } else {
+                cout << "Screen '" << processName << "' not found. Use 'screen -s " << processName << "' to create." << endl;
+            }
+        }
+    }
+
+    void processMainMenuCommand(const string& command) {
+        if (command == "initialize") {
+            commandInitialize();
+        }
+        else if (findCommand(command, "screen -r") || findCommand(command, "screen -s")) {
+            handleScreenCommand(command);
+        }
+        else if (command == "screen -ls") {
+            listScreens();
+        }
+        else if (command == "scheduler-test") {
+            commandSchedulerTest();
+        }
+        else if (command == "scheduler-stop") {
+            commandSchedulerStop();
+        }
+        else if (command == "report-util") {
+            commandReportUtil();
+        }
+        else if (command == "clear") {
+            commandClear();
+        }
+        else if (command == "exit") {
+            commandExit();
+        }
+        else if (command == "help") {
+            commandHelp();
+        }
         else {
-            vec.push_back(processName);
-            commandScreen(command, processName, vec2);
+            cout << "Unknown command: " << command << endl;
+            cout << "Type 'help' for available commands." << endl;
         }
     }
-    else if (command == "scheduler-test") {
-        commandSchedulerTest();
+
+    void processScreenCommand(const string& command) {
+        if (command == "exit") {
+            commandExit();
+        }
+        else if (command == "help") {
+            commandHelp();
+        }
+        else if (command == "clear") {
+            commandClear();
+        }
+        else {
+            cout << "Executing command in screen '" << currentScreen->getName() << "': " << command << endl;
+            currentScreen->simulateProgress();
+            cout << "Command completed. Progress updated." << endl;
+            currentScreen->display();
+        }
     }
-    else if (command == "scheduler-stop") {
-        commandSchedulerStop();
+
+    void processCommand(const string& command) {
+        if (inMainMenu) {
+            processMainMenuCommand(command);
+        } else {
+            processScreenCommand(command);
+        }
     }
-    else if (command == "report-util") {
-        commandReportUtil();
+
+    void showPrompt() {
+        if (inMainMenu) {
+            cout << "\033[33mType 'exit' to quit, 'clear' to clear screen, 'help' for commands\033[0m\n";
+            cout << "Enter a command: ";
+        } else {
+            cout << "\n\033[33m[Screen: " << currentScreen->getName() << "] Enter command (or 'exit' to return): \033[0m";
+        }
     }
-    else if (command == "clear") {
-        commandClear();
+
+    void run() {
+        string command;
+        clearScreen();
+        printHeader();
+        
+        while (true) {
+            showPrompt();
+            getline(cin, command);
+            processCommand(command);
+        }
     }
-    else if (command == "exit") {
-        commandExit();
-    }
-    else if (command == "help") {
-        commandHelp();
-    }
-    // else if (command == "checkVec"){ //! Debug only
-    //     printVector(vec);
-    // }
-    else {
-        cout << "Unknown command: " << command << std::endl;
-    }
-}
+};
 
 int main() {
-    std::string command;
-    std::vector<std::string> processes;
-    std::vector<screenConsole> consoles;
-    clearScreen();
-    printHeader();
-
-    while (true) {
-        cout << "\033[33mType 'exit' to quit, 'clear' to clear the screen, or 'help' to view available commands\033[0m\n";
-        cout << "Enter a command: ";
-        std::getline(std::cin, command);
-        processCommand(command, processes, consoles);
-    }
-
+    ConsoleManager manager;
+    manager.run();
     return 0;
 }
