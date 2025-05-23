@@ -1,8 +1,17 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <ctime>
+#include <regex>
+#include <vector>
 
 using namespace std;
+
+struct screenConsole{
+    std::string processName;
+    int totalLines;
+    std::string creationDate;
+};
 
 void clearScreen() {
     #ifdef _WIN32
@@ -37,8 +46,37 @@ void commandInitialize() {
     cout << "initialize command recognized. Doing something." << std::endl;
 }
 
-void commandScreen() {
-    cout << "screen command recognized. Doing something." << std::endl;
+std::string extractName(const std::string& command) {
+    std::regex pattern(R"(screen\s+-[rs]\s+(\S+))");
+    std::smatch match;
+    if (std::regex_search(command, match, pattern) && match.size() > 1) {
+        return match[1];
+    }
+    return "";
+}
+
+void printScreenConsole(const std::string& processName, std::vector<screenConsole>& vec2){
+    for(const auto& process : vec2) {
+        if (process.processName == processName) {
+            cout << std::endl;
+            cout << "==============================" << std::endl;
+            cout << "Process Name: "<< process.processName << std::endl;
+            cout << "Total lines of instruction: " << process.totalLines <<std::endl;
+            cout << "Created on: "<< process.creationDate << std::endl;
+            cout << "==============================" << std::endl;
+            cout << std::endl;
+        }
+    }
+}
+
+void commandScreen(const std::string& command, const std::string& processName, std::vector<screenConsole>& vec2) {
+    std::time_t t = std::time(nullptr);
+    std::tm* now = std::localtime(&t);
+    char time[100];
+    std::strftime(time, sizeof(time), "%m/%d/%Y, %I:%M:%S %p", now);
+
+    vec2.push_back({processName, 0, time});
+    printScreenConsole(processName, vec2);
 }
 
 void commandSchedulerTest() {
@@ -64,12 +102,28 @@ void commandExit() {
     exit(0);
 }
 
-void processCommand(const std::string& command) {
-    if (command == "initialize") {
-        commandInitialize();
+bool findCommand(const std::string& text, const std::string& command) {
+    return text.find(command) != std::string::npos;
+}
+
+// void printVector(const std::vector<std::string>& vec) {
+//     for (const auto& str : vec) {
+//         std::cout << str << std::endl;
+//     }
+// }
+
+void processCommand(const std::string& command, std::vector<std::string>& vec, std::vector<screenConsole>& vec2) {
+    if (findCommand(command, "initialize")) {
     }
-    else if (command == "screen") {
-        commandScreen();
+    else if (findCommand(command, "screen -r") || findCommand(command, "screen -s")) {
+        std::string processName = extractName(command);
+        if(std::find(vec.begin(), vec.end(), processName) != vec.end()){
+            printScreenConsole(processName, vec2);
+        } 
+        else {
+            vec.push_back(processName);
+            commandScreen(command, processName, vec2);
+        }
     }
     else if (command == "scheduler-test") {
         commandSchedulerTest();
@@ -89,6 +143,9 @@ void processCommand(const std::string& command) {
     else if (command == "help") {
         commandHelp();
     }
+    // else if (command == "checkVec"){ //! Debug only
+    //     printVector(vec);
+    // }
     else {
         cout << "Unknown command: " << command << std::endl;
     }
@@ -96,7 +153,8 @@ void processCommand(const std::string& command) {
 
 int main() {
     std::string command;
-
+    std::vector<std::string> processes;
+    std::vector<screenConsole> consoles;
     clearScreen();
     printHeader();
 
@@ -104,7 +162,7 @@ int main() {
         cout << "\033[33mType 'exit' to quit, 'clear' to clear the screen, or 'help' to view available commands\033[0m\n";
         cout << "Enter a command: ";
         std::getline(std::cin, command);
-        processCommand(command);
+        processCommand(command, processes, consoles);
     }
 
     return 0;
