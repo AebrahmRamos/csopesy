@@ -132,9 +132,11 @@ public:
     void commandClear() {
         cout << "clear command recognized. Clearing screen." << endl;
         clearScreen();
-        printHeader();
         if (!inMainMenu && currentScreen) {
             currentScreen->display();
+        } 
+        else{
+            printHeader();  
         }
     }
 
