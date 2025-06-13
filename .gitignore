@@ -30,6 +30,8 @@
 *.exe
 *.out
 *.app
+csopesy
+CSOPESY_MCO
 
 
 .vscode
