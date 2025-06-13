@@ -11,9 +11,10 @@ private:
     int totalLines;
     std::string creationDate;
     bool isActive;
+    int arrivalTime;
 
 public:
-    Screen(const std::string& name);
+    Screen(const std::string& name, int totalCommands = 100);
     void display();
     void simulateProgress();
     std::string getName() const;
@@ -22,6 +23,7 @@ public:
     std::string getCreationDate() const;
     bool getIsActive() const;
     void setActive(bool active);
+    int getArrivalTime() const;
 };
 
 #endif

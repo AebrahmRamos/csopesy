@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include "Screen.h"
+#include "Scheduler.h"
 
 struct GPUInfo {
     int id;
@@ -38,9 +39,10 @@ struct ProcessInfo {
 
 class ConsoleManager {
 private:
-    std::map<std::string, std::shared_ptr<Screen>> screens;
     std::shared_ptr<Screen> currentScreen;
+    std::map<std::string, std::shared_ptr<Screen>> screens;
     bool inMainMenu;
+    std::unique_ptr<Scheduler> scheduler;
     std::string extractName(const std::string& command);
     bool findCommand(const std::string& text, const std::string& command);
     void printGPUInfo(const GPUInfo& gpu);
@@ -49,6 +51,7 @@ private:
     std::vector<ProcessInfo> getDummyProcessData();
 public:
     ConsoleManager();
+    ~ConsoleManager();
     void clearScreen();
     void printHeader();
     void commandHelp();

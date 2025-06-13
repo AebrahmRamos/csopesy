@@ -1,7 +1,12 @@
 #include "Screen.h"
 #include <ctime>
 
-Screen::Screen(const std::string& name) : processName(name), currentLine(1), totalLines(100), isActive(true) {
+Screen::Screen(const std::string& name, int totalCommands) : 
+    processName(name), 
+    currentLine(1), 
+    totalLines(totalCommands), 
+    isActive(true),
+    arrivalTime(static_cast<int>(time(nullptr))) {
     time_t t = time(nullptr);
     tm* now = localtime(&t);
     char timeBuffer[100];
@@ -30,3 +35,4 @@ int Screen::getTotalLines() const { return totalLines; }
 std::string Screen::getCreationDate() const { return creationDate; }
 bool Screen::getIsActive() const { return isActive; }
 void Screen::setActive(bool active) { isActive = active; }
+int Screen::getArrivalTime() const { return arrivalTime; }

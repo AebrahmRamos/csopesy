@@ -6,7 +6,24 @@
 #include <iomanip>
 #include <vector>
 
-ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {}
+ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {
+    scheduler = std::make_unique<Scheduler>();
+    scheduler->start();
+    
+    // Create initial 10 processes
+    for (int i = 1; i <= 10; ++i) {
+        std::string name = "process" + std::to_string(i);
+        auto screen = std::make_shared<Screen>(name, 100);
+        screens[name] = screen;
+        scheduler->addProcess(screen);
+    }
+}
+
+ConsoleManager::~ConsoleManager() {
+    if (scheduler) {
+        scheduler->stop();
+    }
+}
 
 std::string ConsoleManager::extractName(const std::string& command) {
     std::regex pattern(R"(screen\s+-[rs]\s+(\S+))");
@@ -156,15 +173,30 @@ void ConsoleManager::resumeScreen(const std::string& name) {
 }
 
 void ConsoleManager::listScreens() {
-    if (screens.empty()) {
-        std::cout << "No screen sessions found." << std::endl;
-        return;
-    }
-    std::cout << "\n\033[32m=== Active Screen Sessions ===\033[0m\n";
+    std::cout << "\n-----------------------------------------" << std::endl;
+    std::cout << "Running processes:" << std::endl;
+    
     for (const auto& pair : screens) {
-        std::cout << "  • " << pair.first << " (Created: " << pair.second->getCreationDate() << ")" << std::endl;
+        if (pair.second->getIsActive()) {
+            std::cout << std::left << std::setw(12) << pair.first << " ";
+            std::cout << "(" << pair.second->getCreationDate() << ")";
+            std::cout << "     Core: " << std::setw(2) << rand() % 4 << "    ";
+            std::cout << std::setw(5) << pair.second->getCurrentLine() << " / " << pair.second->getTotalLines();
+            std::cout << std::endl;
+        }
     }
-    std::cout << std::endl;
+    
+    std::cout << "\nFinished processes:" << std::endl;
+    for (const auto& pair : screens) {
+        if (!pair.second->getIsActive()) {
+            std::cout << std::left << std::setw(12) << pair.first << " ";
+            std::cout << "(" << pair.second->getCreationDate() << ")";
+            std::cout << "     Finished    ";
+            std::cout << std::setw(5) << pair.second->getTotalLines() << " / " << pair.second->getTotalLines();
+            std::cout << std::endl;
+        }
+    }
+    std::cout << "-----------------------------------------" << std::endl;
 }
 
 void ConsoleManager::handleScreenCommand(const std::string& command) {
