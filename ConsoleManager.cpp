@@ -7,21 +7,14 @@
 #include <vector>
 
 ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {
-    scheduler = std::make_unique<Scheduler>();
-    scheduler->start();
-    
-    // Create initial 10 processes
-    for (int i = 1; i <= 10; ++i) {
-        std::string name = "process" + std::to_string(i);
-        auto screen = std::make_shared<Screen>(name, 100);
-        screens[name] = screen;
-        scheduler->addProcess(screen);
-    }
+    processManager = std::make_unique<ProcessManager>();
+    processManager->initialize();
+    processManager->startScheduler();
 }
 
 ConsoleManager::~ConsoleManager() {
-    if (scheduler) {
-        scheduler->stop();
+    if (processManager) {
+        processManager->stopScheduler();
     }
 }
 
@@ -82,7 +75,9 @@ void ConsoleManager::commandInitialize() {
 }
 
 void ConsoleManager::commandSchedulerTest() {
-    std::cout << "scheduler-test command recognized. Running scheduler test." << std::endl;
+    if (processManager) {
+        processManager->showProcessStatus();
+    }
 }
 
 void ConsoleManager::commandSchedulerStop() {
@@ -173,30 +168,15 @@ void ConsoleManager::resumeScreen(const std::string& name) {
 }
 
 void ConsoleManager::listScreens() {
-    std::cout << "\n-----------------------------------------" << std::endl;
-    std::cout << "Running processes:" << std::endl;
-    
-    for (const auto& pair : screens) {
-        if (pair.second->getIsActive()) {
-            std::cout << std::left << std::setw(12) << pair.first << " ";
-            std::cout << "(" << pair.second->getCreationDate() << ")";
-            std::cout << "     Core: " << std::setw(2) << rand() % 4 << "    ";
-            std::cout << std::setw(5) << pair.second->getCurrentLine() << " / " << pair.second->getTotalLines();
-            std::cout << std::endl;
-        }
+    if (screens.empty()) {
+        std::cout << "No screen sessions found." << std::endl;
+        return;
     }
-    
-    std::cout << "\nFinished processes:" << std::endl;
+    std::cout << "\n\033[32m=== Active Screen Sessions ===\033[0m\n";
     for (const auto& pair : screens) {
-        if (!pair.second->getIsActive()) {
-            std::cout << std::left << std::setw(12) << pair.first << " ";
-            std::cout << "(" << pair.second->getCreationDate() << ")";
-            std::cout << "     Finished    ";
-            std::cout << std::setw(5) << pair.second->getTotalLines() << " / " << pair.second->getTotalLines();
-            std::cout << std::endl;
-        }
+        std::cout << "  • " << pair.first << " (Created: " << pair.second->getCreationDate() << ")" << std::endl;
     }
-    std::cout << "-----------------------------------------" << std::endl;
+    std::cout << std::endl;
 }
 
 void ConsoleManager::handleScreenCommand(const std::string& command) {

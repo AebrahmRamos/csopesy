@@ -6,7 +6,7 @@
 #include <memory>
 #include <vector>
 #include "Screen.h"
-#include "Scheduler.h"
+#include "ProcessManager.h"
 
 struct GPUInfo {
     int id;
@@ -42,7 +42,7 @@ private:
     std::shared_ptr<Screen> currentScreen;
     std::map<std::string, std::shared_ptr<Screen>> screens;
     bool inMainMenu;
-    std::unique_ptr<Scheduler> scheduler;
+    std::unique_ptr<ProcessManager> processManager;
     std::string extractName(const std::string& command);
     bool findCommand(const std::string& text, const std::string& command);
     void printGPUInfo(const GPUInfo& gpu);

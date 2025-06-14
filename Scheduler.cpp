@@ -1,10 +1,12 @@
 #include "Scheduler.h"
+#include "Process.h"
+#include "ProcessManager.h"
 #include <fstream>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 
-Scheduler::Scheduler() : running(false), activeProcesses(0) {}
+Scheduler::Scheduler(ProcessManager* pm) : running(false), activeProcesses(0), processManager(pm) {}
 
 Scheduler::~Scheduler() {
     stop();
@@ -28,7 +30,7 @@ void Scheduler::stop() {
     cpuThreads.clear();
 }
 
-void Scheduler::addProcess(std::shared_ptr<Screen> process) {
+void Scheduler::addProcess(std::shared_ptr<Process> process) {
     {
         std::lock_guard<std::mutex> lock(queueMutex);
         readyQueue.push(process);
@@ -43,7 +45,7 @@ bool Scheduler::isProcessing() const {
 
 void Scheduler::cpuWorker(int coreId) {
     while (running) {
-        std::shared_ptr<Screen> process = nullptr;
+        std::shared_ptr<Process> process = nullptr;
         
         {
             std::unique_lock<std::mutex> lock(queueMutex);
@@ -73,21 +75,25 @@ std::string getCurrentTimestamp() {
     return ss.str();
 }
 
-void Scheduler::executeProcess(std::shared_ptr<Screen> process, int coreId) {
+void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
+    // Update process manager with core assignment
+    if (processManager) {
+        processManager->updateProcessCore(process->getProcessId(), coreId);
+    }
+    
     std::string outputFileName = process->getName() + "_output.txt";
     std::ofstream outputFile(outputFileName, std::ios::app);
     
-    while (process->getCurrentLine() < process->getTotalLines()) {
+    while (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive()) {
         std::string timestamp = getCurrentTimestamp();
         outputFile << "(" << timestamp << ") Core " << coreId 
                   << ": Executing print command " << process->getCurrentLine() 
                   << " of process " << process->getName() << std::endl;
                   
-        process->simulateProgress();
-        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // added sleep to simulate work/process para hindi tuloy tuloy
+        process->incrementLine();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Simulate work
     }
     
-    process->setActive(false);
     activeProcesses--;
     outputFile.close();
 }
