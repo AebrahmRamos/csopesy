@@ -10,7 +10,7 @@
 
 using namespace std;
 
-bool initialized = false;
+
 
 class Screen {
 private:
@@ -60,6 +60,7 @@ private:
     map<string, shared_ptr<Screen>> screens;
     shared_ptr<Screen> currentScreen;
     bool inMainMenu;
+    bool initialized = false;
 
     string extractName(const string& command) {
         regex pattern(R"(screen\s+-[rs]\s+(\S+))");
@@ -258,7 +259,30 @@ public:
         }
     }
 
+    
+
+    string extractPrintMsg(const std::string& command) {
+        string prefix = "PRINT(";
+        int pos = command.find(prefix);
+        int start = pos + prefix.size();
+        int end = command.find(')', start);
+        if (start == end){
+            return "";
+        }
+
+        string msg = command.substr(start, end - start);
+        return msg;
+    }
+
     void processScreenCommand(const string& command) {
+        string printPrefix = "PRINT(";
+        char commandSuffix = ')';
+
+        int printPos = command.find(printPrefix);
+        int printStart = printPos + printPrefix.size();
+        int printEnd = command.find(')', printStart);
+
+
         if (command == "exit") {
             commandExit();
         }
@@ -267,6 +291,19 @@ public:
         }
         else if (command == "clear") {
             commandClear();
+        }
+        else if (printPos != string::npos && printEnd != string::npos) {
+            string printMsg = extractPrintMsg(command);
+            if(extractPrintMsg(command) != ""){
+                cout << extractPrintMsg(command) << endl;
+                currentScreen->simulateProgress();
+                cout << "Command completed. Progress updated." << endl;
+                currentScreen->display();
+            }
+            else{
+                cout << "PRINT arg cannot be empty."<< endl;
+            }
+            
         }
         else {
             cout << "Executing command in screen '" << currentScreen->getName() << "': " << command << endl;
