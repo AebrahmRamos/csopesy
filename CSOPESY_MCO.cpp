@@ -10,6 +10,8 @@
 
 using namespace std;
 
+bool initialized = false;
+
 class Screen {
 private:
     string processName;
@@ -221,30 +223,34 @@ public:
     void processMainMenuCommand(const string& command) {
         if (command == "initialize") {
             commandInitialize();
+            initialized = true;
         }
-        else if (findCommand(command, "screen -r") || findCommand(command, "screen -s")) {
+        else if ((findCommand(command, "screen -r") || findCommand(command, "screen -s")) && initialized == true) {
             handleScreenCommand(command);
         }
-        else if (command == "screen -ls") {
+        else if (command == "screen -ls" && initialized == true) {
             listScreens();
         }
-        else if (command == "scheduler-test") {
+        else if (command == "scheduler-test" && initialized == true) {
             commandSchedulerTest();
         }
-        else if (command == "scheduler-stop") {
+        else if (command == "scheduler-stop" && initialized == true) {
             commandSchedulerStop();
         }
-        else if (command == "report-util") {
+        else if (command == "report-util" && initialized == true) {
             commandReportUtil();
         }
-        else if (command == "clear") {
+        else if (command == "clear" && initialized == true) {
             commandClear();
         }
         else if (command == "exit") {
             commandExit();
         }
-        else if (command == "help") {
+        else if (command == "help" && initialized == true) {
             commandHelp();
+        }
+        else if (initialized == false && command != "initialize" && command != "exit") {
+            cout << "Please initialize the OS first." << endl;
         }
         else {
             cout << "Unknown command: " << command << endl;
