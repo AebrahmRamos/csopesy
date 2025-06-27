@@ -2,8 +2,21 @@
 #include <iostream>
 #include <regex>
 #include <cstdlib>
+#include <ctime>
+#include <iomanip>
+#include <vector>
 
-ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {}
+ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {
+    processManager = std::make_unique<ProcessManager>();
+    processManager->initialize();
+    processManager->startScheduler();
+}
+
+ConsoleManager::~ConsoleManager() {
+    if (processManager) {
+        processManager->stopScheduler();
+    }
+}
 
 std::string ConsoleManager::extractName(const std::string& command) {
     std::regex pattern(R"(screen\s+-[rs]\s+(\S+))");
@@ -48,6 +61,7 @@ void ConsoleManager::commandHelp() {
         std::cout << "  clear          - Clear the screen\n";
         std::cout << "  help           - Show this help menu\n";
         std::cout << "  exit           - Exit the application\n";
+        std::cout << "  nvidia-smi     - Shows GPU summary and running processes\n";
     } else {
         std::cout << "\n\033[32m=== Screen Session Help ===\033[0m\n";
         std::cout << "  exit - Return to main menu\n";
@@ -61,7 +75,9 @@ void ConsoleManager::commandInitialize() {
 }
 
 void ConsoleManager::commandSchedulerTest() {
-    std::cout << "scheduler-test command recognized. Running scheduler test." << std::endl;
+    if (processManager) {
+        processManager->showProcessStatus();
+    }
 }
 
 void ConsoleManager::commandSchedulerStop() {
@@ -70,6 +86,40 @@ void ConsoleManager::commandSchedulerStop() {
 
 void ConsoleManager::commandReportUtil() {
     std::cout << "report-util command recognized. Generating report." << std::endl;
+}
+
+void ConsoleManager::commandNvidiaSmi() {
+    std::cout << "\n";
+    std::cout << "+-----------------------------------------------------------------------------------------+\n";
+    std::cout << "| NVIDIA-SMI 535.86.10              Driver Version: 535.86.10      CUDA Version: 12.2     |\n";
+    std::cout << "|-----------------------------------------+------------------------+----------------------|\n";
+    std::cout << "| GPU  Name                  Persistence-M| Bus-Id          Disp.A | Volatile Uncorr. ECC |\n";
+    std::cout << "| Fan  Temp   Perf           Pwr:Usage/Cap|           Memory-Usage | GPU-Util  Compute M. |\n";
+    std::cout << "|                                         |                        |               MIG M. |\n";
+    std::cout << "|=========================================+========================+======================|\n";
+    
+    // Get dummy GPU data and print it
+    std::vector<GPUInfo> gpus = getDummyGPUData();
+    for (const auto& gpu : gpus) {
+        printGPUInfo(gpu);
+    }
+    
+    std::cout << "+-----------------------------------------+------------------------+----------------------+\n";
+    std::cout << "\n";
+    std::cout << "+-----------------------------------------------------------------------------------------+\n";
+    std::cout << "| Processes:                                                                              |\n";
+    std::cout << "|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |\n";
+    std::cout << "|        ID   ID                                                               Usage      |\n";
+    std::cout << "|=========================================================================================|\n";
+    
+    // Get dummy process data and print it
+    std::vector<ProcessInfo> processes = getDummyProcessData();
+    for (const auto& process : processes) {
+        printProcessInfo(process);
+    }
+    
+    std::cout << "+-----------------------------------------------------------------------------------------+\n";
+    std::cout << "\n";
 }
 
 void ConsoleManager::commandClear() {
@@ -166,6 +216,9 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     else if (command == "report-util") {
         commandReportUtil();
     }
+    else if (command == "nvidia-smi") {
+        commandNvidiaSmi();
+    }
     else if (command == "clear") {
         commandClear();
     }
@@ -231,4 +284,85 @@ void ConsoleManager::run() {
         std::getline(std::cin, command);
         processCommand(command);
     }
+}
+
+void ConsoleManager::printGPUInfo(const GPUInfo& gpu) {
+    // First line: GPU ID, Name, Persistence, Bus-ID, Display, ECC
+    std::cout << "|" << std::setw(4) << gpu.id << "  ";
+    std::cout << std::left << std::setw(26) << gpu.name.substr(0, 23);
+    std::cout << std::right << std::setw(5) << gpu.persistence << "    |   ";
+    std::cout << std::left << std::setw(15) << gpu.busId << " ";
+    std::cout << std::right << std::setw(3) << gpu.display << " |";
+    std::cout << std::setw(21) << gpu.ecc << " |\n";
+    
+    // Second line: Fan, Temp, Perf, Power Usage/Cap, Memory Usage, GPU Util, Compute Mode
+    std::cout << "|" << std::setw(3) << gpu.fanPercent << "%";
+    std::cout << std::setw(5) << gpu.tempC << "C";
+    std::cout << std::setw(6) << gpu.perf;
+    std::cout << std::setw(25) << (std::to_string(gpu.powerUsage) + "W / " + std::to_string(gpu.powerCap) + "W");
+    std::cout << "|";
+    std::cout << std::setw(13) << (std::to_string(gpu.memoryUsed) + "MiB");
+    std::cout << " /" << std::setw(7) << (std::to_string(gpu.memoryTotal) + "MiB");
+    std::cout << " |";
+    std::cout << std::setw(10) << (std::to_string(gpu.gpuUtil) + "%");
+    std::cout << std::setw(11) << gpu.computeMode << " |\n";
+    
+    // Third line: Empty fields with MIG info
+    std::cout << "|" << std::setw(41) << " ";
+    std::cout << "|" << std::setw(24) << " ";
+    std::cout << "|" << std::setw(21) << gpu.mig << " |\n";
+}
+
+void ConsoleManager::printProcessInfo(const ProcessInfo& process) {
+    // Truncate process name if too long to maintain table alignment
+    std::string truncatedName = process.processName;
+    if (truncatedName.length() > 38) {
+        truncatedName = truncatedName.substr(0, 35) + "...";
+    }
+    
+    std::cout << "|" << std::setw(5) << process.gpu;
+    std::cout << std::setw(6) << process.gi;
+    std::cout << std::setw(5) << process.ci;
+    std::cout << std::setw(10) << process.pid;
+    std::cout << std::setw(8) << process.type;
+    std::cout << "   " << std::left << std::setw(38) << truncatedName;
+    std::cout << std::right << std::setw(13) << (std::to_string(process.memoryUsage) + "MiB");
+    std::cout << " |\n";
+}
+
+std::vector<GPUInfo> ConsoleManager::getDummyGPUData() {
+    std::vector<GPUInfo> gpus;
+    
+    GPUInfo gpu;
+    gpu.id = 0;
+    gpu.name = "NVIDIA GeForce RTX 4080";
+    gpu.persistence = "Off";
+    gpu.busId = "00000000:01:00.0";
+    gpu.display = "On";
+    gpu.ecc = "N/A";
+    gpu.fanPercent = 30;
+    gpu.tempC = 45;
+    gpu.perf = "P2";
+    gpu.powerUsage = 85;
+    gpu.powerCap = 320;
+    gpu.memoryUsed = 3547;
+    gpu.memoryTotal = 16376;
+    gpu.gpuUtil = 12;
+    gpu.computeMode = "Default";
+    gpu.mig = "N/A";
+    
+    gpus.push_back(gpu);
+    return gpus;
+}
+
+std::vector<ProcessInfo> ConsoleManager::getDummyProcessData() {
+    std::vector<ProcessInfo> processes;
+    
+    processes.push_back({0, "N/A", "N/A", 1234, "G", "/System/Applications/Activity Monitor.app", 256});
+    processes.push_back({0, "N/A", "N/A", 2468, "C", "python3", 512});
+    processes.push_back({0, "N/A", "N/A", 3692, "G", "/Applications/Google Chrome.app", 1024});
+    processes.push_back({0, "N/A", "N/A", 4816, "C", "./training_model", 1536});
+    processes.push_back({0, "N/A", "N/A", 5940, "G", "/Applications/Blender.app", 219});
+    
+    return processes;
 }

@@ -4,17 +4,54 @@
 #include <string>
 #include <map>
 #include <memory>
+#include <vector>
 #include "Screen.h"
+#include "ProcessManager.h"
+
+struct GPUInfo {
+    int id;
+    std::string name;
+    std::string persistence;
+    std::string busId;
+    std::string display;
+    std::string ecc;
+    int fanPercent;
+    int tempC;
+    std::string perf;
+    int powerUsage;
+    int powerCap;
+    int memoryUsed;
+    int memoryTotal;
+    int gpuUtil;
+    std::string computeMode;
+    std::string mig;
+};
+
+struct ProcessInfo {
+    int gpu;
+    std::string gi;
+    std::string ci;
+    int pid;
+    std::string type;
+    std::string processName;
+    int memoryUsage;
+};
 
 class ConsoleManager {
 private:
-    std::map<std::string, std::shared_ptr<Screen>> screens;
     std::shared_ptr<Screen> currentScreen;
+    std::map<std::string, std::shared_ptr<Screen>> screens;
     bool inMainMenu;
+    std::unique_ptr<ProcessManager> processManager;
     std::string extractName(const std::string& command);
     bool findCommand(const std::string& text, const std::string& command);
+    void printGPUInfo(const GPUInfo& gpu);
+    void printProcessInfo(const ProcessInfo& process);
+    std::vector<GPUInfo> getDummyGPUData();
+    std::vector<ProcessInfo> getDummyProcessData();
 public:
     ConsoleManager();
+    ~ConsoleManager();
     void clearScreen();
     void printHeader();
     void commandHelp();
@@ -22,6 +59,7 @@ public:
     void commandSchedulerTest();
     void commandSchedulerStop();
     void commandReportUtil();
+    void commandNvidiaSmi();
     void commandClear();
     void commandExit();
     void createScreen(const std::string& name);
