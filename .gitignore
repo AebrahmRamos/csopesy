@@ -31,7 +31,15 @@
 *.out
 *.app
 csopesy
-CSOPESY_MCO
 
 .vscode
-csopesy
+process1_output.txt
+process2_output.txt
+process3_output.txt
+process4_output.txt
+process5_output.txt
+process6_output.txt
+process7_output.txt
+process8_output.txt
+process9_output.txt
+process10_output.txt

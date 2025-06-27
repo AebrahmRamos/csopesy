@@ -5,8 +5,11 @@
 #include <ctime>
 #include <iomanip>
 #include <vector>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 
-ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true) {
+ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true), initialized(false) {
     processManager = std::make_unique<ProcessManager>();
     processManager->initialize();
     processManager->startScheduler();
@@ -29,6 +32,121 @@ std::string ConsoleManager::extractName(const std::string& command) {
 
 bool ConsoleManager::findCommand(const std::string& text, const std::string& command) {
     return text.find(command) != std::string::npos;
+}
+
+std::string ConsoleManager::extractPrintMsg(const std::string& command) {
+    std::string prefix = "PRINT(";
+    int pos = command.find(prefix);
+    int start = pos + prefix.size();
+    int end = command.find(')', start);
+    if (start == end) {
+        return "";
+    }
+    
+    std::string msg = command.substr(start, end - start);
+    return msg;
+}
+
+bool ConsoleManager::loadConfig(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        config.errorMessage = "Could not open config file: " + filename;
+        config.isValid = false;
+        return false;
+    }
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        
+        std::istringstream iss(line);
+        std::string key, value;
+        if (!(iss >> key >> value)) continue;
+        
+        if (key == "num-cpu") {
+            config.numCpu = std::stoi(value);
+        } else if (key == "scheduler") {
+            config.scheduler = value;
+        } else if (key == "quantum-cycles") {
+            config.quantumCycles = std::stoi(value);
+        } else if (key == "batch-process-freq") {
+            config.batchProcessFreq = std::stoi(value);
+        } else if (key == "min-ins") {
+            config.minIns = std::stoi(value);
+        } else if (key == "max-ins") {
+            config.maxIns = std::stoi(value);
+        } else if (key == "delays-per-exec") {
+            config.delaysPerExec = std::stoi(value);
+        }
+    }
+    
+    file.close();
+    return validateConfig();
+}
+
+bool ConsoleManager::validateConfig() {
+    // Validate num-cpu if within 1 - 128
+    if (config.numCpu < 1 || config.numCpu > 128) {
+        config.errorMessage = "num-cpu must be between 1 and 128. Got: " + std::to_string(config.numCpu);
+        config.isValid = false;
+        return false;
+    }
+    
+    // Checks if valid scheduler choice
+    if (config.scheduler != "fcfs" && config.scheduler != "rr") {
+        config.errorMessage = "scheduler must be 'fcfs' or 'rr'. Got: " + config.scheduler;
+        config.isValid = false;
+        return false;
+    }
+    
+    // Checks if quyantum-cycles is valid
+    if (config.quantumCycles < 1) {
+        config.errorMessage = "quantum-cycles must be >= 1. Got: " + std::to_string(config.quantumCycles);
+        config.isValid = false;
+        return false;
+    }
+    
+    // Validate batch-process-freq
+    if (config.batchProcessFreq < 1) {
+        config.errorMessage = "batch-process-freq must be >= 1. Got: " + std::to_string(config.batchProcessFreq);
+        config.isValid = false;
+        return false;
+    }
+    
+    // Validate min-ins [1, ∞]
+    if (config.minIns < 1) {
+        config.errorMessage = "min-ins must be >= 1. Got: " + std::to_string(config.minIns);
+        config.isValid = false;
+        return false;
+    }
+    
+    // Validate max-ins [1, ∞] and max-ins >= min-ins
+    if (config.maxIns < 1) {
+        config.errorMessage = "max-ins must be >= 1. Got: " + std::to_string(config.maxIns);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.maxIns < config.minIns) {
+        config.errorMessage = "max-ins must be >= min-ins. Got max: " + std::to_string(config.maxIns) + ", min: " + std::to_string(config.minIns);
+        config.isValid = false;
+        return false;
+    }
+    
+    // Validate delays-per-exec [0, ∞]
+    if (config.delaysPerExec < 0) {
+        config.errorMessage = "delays-per-exec must be >= 0. Got: " + std::to_string(config.delaysPerExec);
+        config.isValid = false;
+        return false;
+    }
+    
+    config.isValid = true;
+    config.errorMessage = "";
+    return true;
+}
+
+void ConsoleManager::printConfigError(const std::string& error) {
+    std::cout << "\033[31m[CONFIG ERROR]\033[0m " << error << std::endl;
 }
 
 void ConsoleManager::clearScreen() {
@@ -71,7 +189,24 @@ void ConsoleManager::commandHelp() {
 }
 
 void ConsoleManager::commandInitialize() {
-    std::cout << "initialize command recognized. System initialized." << std::endl;
+    std::cout << "Reading config.txt..." << std::endl;      // Loading message
+    
+    if (loadConfig("config.txt")) {
+        std::cout << "\033[32m[CONFIG SUCCESS]\033[0m Configuration loaded successfully!" << std::endl;
+        std::cout << "  CPU Cores: " << config.numCpu << std::endl;
+        std::cout << "  Scheduler: " << config.scheduler << std::endl;
+        std::cout << "  Quantum Cycles: " << config.quantumCycles << std::endl;
+        std::cout << "  Batch Process Frequency: " << config.batchProcessFreq << std::endl;
+        std::cout << "  Min Instructions: " << config.minIns << std::endl;
+        std::cout << "  Max Instructions: " << config.maxIns << std::endl;
+        std::cout << "  Delays per Execution: " << config.delaysPerExec << std::endl;
+        std::cout << "System initialized successfully." << std::endl;
+        initialized = true;
+    } else {
+        printConfigError(config.errorMessage);
+        std::cout << "System initialization failed. Please fix config.txt and try again." << std::endl;
+        initialized = false;
+    }
 }
 
 void ConsoleManager::commandSchedulerTest() {
@@ -207,32 +342,35 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     if (command == "initialize") {
         commandInitialize();
     }
-    else if (command == "scheduler-test") {
+    else if (command == "scheduler-test" && initialized) {
         commandSchedulerTest();
     }
-    else if (command == "scheduler-stop") {
+    else if (command == "scheduler-stop" && initialized) {
         commandSchedulerStop();
     }
-    else if (command == "report-util") {
+    else if (command == "report-util" && initialized) {
         commandReportUtil();
     }
-    else if (command == "nvidia-smi") {
+    else if (command == "nvidia-smi" && initialized) {
         commandNvidiaSmi();
     }
-    else if (command == "clear") {
+    else if (command == "clear" && initialized) {
         commandClear();
     }
     else if (command == "exit") {
         commandExit();
     }
-    else if (command == "help") {
+    else if (command == "help" && initialized) {
         commandHelp();
     }
-    else if (command == "screen -ls") {
+    else if (command == "screen -ls" && initialized) {
         listScreens();
     }
-    else if (std::regex_match(command, std::regex(R"(screen\s+-[rs]\s+\S+)"))) {
+    else if (std::regex_match(command, std::regex(R"(screen\s+-[rs]\s+\S+)")) && initialized) {
         handleScreenCommand(command);
+    }
+    else if (!initialized && command != "initialize" && command != "exit") {
+        std::cout << "Please initialize the OS first." << std::endl;
     }
     else {
         std::cout << "Unknown command: " << command << std::endl;
@@ -241,6 +379,11 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
 }
 
 void ConsoleManager::processScreenCommand(const std::string& command) {
+    std::string printPrefix = "PRINT(";
+    int printPos = command.find(printPrefix);
+    int printStart = printPos + printPrefix.size();
+    int printEnd = command.find(')', printStart);
+
     if (command == "exit") {
         commandExit();
     }
@@ -249,6 +392,18 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
     }
     else if (command == "clear") {
         commandClear();
+    }
+    else if (printPos != std::string::npos && printEnd != std::string::npos) {
+        std::string printMsg = extractPrintMsg(command);
+        if (!printMsg.empty()) {
+            std::cout << printMsg << std::endl;
+            currentScreen->simulateProgress();
+            std::cout << "Command completed. Progress updated." << std::endl;
+            currentScreen->display();
+        }
+        else {
+            std::cout << "PRINT arg cannot be empty." << std::endl;
+        }
     }
     else {
         std::cout << "Executing command in screen '" << currentScreen->getName() << "': " << command << std::endl;
