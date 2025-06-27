@@ -261,8 +261,8 @@ public:
 
     
 
-    string extractPrintMsg(const std::string& command) {
-        string prefix = "PRINT(";
+    string extractCommandValue(const std::string& command, const std::string type) {
+        string prefix = type + "(";
         int pos = command.find(prefix);
         int start = pos + prefix.size();
         int end = command.find(')', start);
@@ -270,17 +270,22 @@ public:
             return "";
         }
 
-        string msg = command.substr(start, end - start);
-        return msg;
+        string value = command.substr(start, end - start);
+        return value;
     }
 
     void processScreenCommand(const string& command) {
         string printPrefix = "PRINT(";
+        string declarePrefix = "DECLARE(";
         char commandSuffix = ')';
 
         int printPos = command.find(printPrefix);
         int printStart = printPos + printPrefix.size();
         int printEnd = command.find(')', printStart);
+
+        int declarePos = command.find(declarePrefix);
+        int declareStart = declarePos + declarePrefix.size();
+        int declareEnd = command.find(')', declareStart);
 
 
         if (command == "exit") {
@@ -293,9 +298,9 @@ public:
             commandClear();
         }
         else if (printPos != string::npos && printEnd != string::npos) {
-            string printMsg = extractPrintMsg(command);
-            if(extractPrintMsg(command) != ""){
-                cout << extractPrintMsg(command) << endl;
+            string printMsg = extractCommandValue(command, "PRINT");
+            if(printMsg != ""){
+                cout << printMsg << endl;
                 currentScreen->simulateProgress();
                 cout << "Command completed. Progress updated." << endl;
                 currentScreen->display();
@@ -304,6 +309,54 @@ public:
                 cout << "PRINT arg cannot be empty."<< endl;
             }
             
+        }
+        else if (declarePos != string::npos && declareEnd != string::npos) {
+            string declareValues = extractCommandValue(command, "DECLARE");
+            if(declareValues!= ""){
+                int commaPos = declareValues.find(',');
+                bool correctArgs = true;
+                if (commaPos != string::npos) {
+                    string var = declareValues.substr(0, commaPos);
+                    int spacePos = declareValues.find(' ');
+                    string temp;
+                    if(spacePos != string::npos){
+                        temp = declareValues.substr(commaPos + 2);
+                    } else {
+                        temp = declareValues.substr(commaPos + 1);
+                    }
+                    
+                    bool isNumber = all_of(temp.begin(), temp.end(), ::isdigit);
+
+                    uint16_t value;
+                    if(isNumber){
+                        int conTemp = stoi(temp);
+                        if (conTemp < 0 || conTemp > 65535) {
+                            cout << "Value out of range for uint16_t." << endl;
+                            correctArgs = false;
+                        } else {
+                            value = static_cast<uint16_t>(conTemp);
+
+                        }
+                    }
+                    else {
+                        correctArgs = false;
+                    }
+
+                    if (correctArgs == true){
+                        cout << "var: " << var << endl;
+                        cout << "value: " << value << endl;
+                    }
+                    else {
+                        cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << endl;
+                    }
+                } 
+                else {
+                    cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << endl;
+                }
+            }
+            else{
+                cout << "DECLARE arg cannot be empty."<< endl;
+            }
         }
         else {
             cout << "Executing command in screen '" << currentScreen->getName() << "': " << command << endl;
