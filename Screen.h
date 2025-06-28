@@ -16,7 +16,7 @@ private:
     bool isActive;
     int arrivalTime;
     std::shared_ptr<Process> attachedProcess;
-    int loopDepth = 0;
+    int loopIter = 0;
 public:
     Screen(const std::string& name, int totalCommands = 100);
     void display();

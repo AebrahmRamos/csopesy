@@ -99,15 +99,15 @@ void Screen::simulateProgress() {
 }
 
 void Screen::enterLoop() {
-    loopDepth++;
+    loopIter++;
 }
 
 void Screen::exitLoop() {
-    loopDepth--;
+    loopIter--;
 }
 
-int Screen::loopDepth() const {
-    return loopDepth;
+int Screen::getLoopDepth() const {
+    return loopIter;
 }
 
 std::string Screen::getName() const { return processName; }
