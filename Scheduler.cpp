@@ -45,6 +45,10 @@ bool Scheduler::isProcessing() const {
     return activeProcesses > 0;
 }
 
+bool Scheduler::isRunning() const {
+    return running;
+}
+
 void Scheduler::cpuWorker(int coreId) {
     while (running) {
         std::shared_ptr<Process> process = nullptr;
@@ -136,7 +140,7 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
         }
         
         // If process still has more instructions and quantum expired, requeue it
-        if (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed >= quantumCycles) {
+        if (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed >= quantumCycles && running) {
             requeueProcess(process);
             activeProcesses++;
         }
@@ -151,7 +155,7 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
         }
         
         // Requeue if not finished
-        if (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive()) {
+        if (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive() && running) {
             requeueProcess(process);
             activeProcesses++;
         }

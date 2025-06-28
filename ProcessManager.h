@@ -51,6 +51,7 @@ public:
     int getNumCores() const;
     int getUsedCores() const;
     double getCpuUtilization() const;
+    bool isSchedulerRunning() const;  // Check if scheduler is actively running
 
     void sleepCurrentProcess(int ticks);
 };
