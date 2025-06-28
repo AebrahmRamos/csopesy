@@ -42,40 +42,41 @@ std::string ConsoleManager::extractCommandValue(const std::string& command, cons
     if (type == "PRINT") {
         prefix = "PRINT(\"";
         pos = command.find(prefix);
-        start = pos + prefix.size();
-
-        if (start == std::string::npos) {
+        if (pos == std::string::npos) {
             return ""; // Return empty if "PRINT(" not found
         }
+        start = pos + prefix.size();
 
+        // Check if there's variable concatenation
         int plusPos = command.find("\" + ", start);
         if (plusPos != std::string::npos) {
-            end = command.find(')', start);\
-        } else {
-            end = command.find("\")", start);
-        }
-        if (start == end || end == std::string::npos) {
-            return "";
-        }
-
-        value = command.substr(start, end - start);
-
-        while (plusPos != std::string::npos) {
-            std::string beforeVar = value.substr(0, plusPos);
-            std::string varName = value.substr(plusPos + 3);
-
+            // Extract the string part before " + "
+            std::string stringPart = command.substr(start, plusPos - start);
+            
+            // Extract the variable name after " + "
+            int varStart = plusPos + 4; // Skip "\" + "
+            int varEnd = command.find(')', varStart);
+            if (varEnd == std::string::npos) {
+                return "";
+            }
+            std::string varName = command.substr(varStart, varEnd - varStart);
+            
+            // Look up the variable value
             if (this->declaredVariables.find(varName) != declaredVariables.end()) {
                 uint16_t varValue = declaredVariables[varName];
-                value = beforeVar + std::to_string(varValue) + value.substr(plusPos + 3 + varName.length());
+                return stringPart + std::to_string(varValue);
             } else {
                 std::cout << "Error: Variable '" << varName << "' is not declared." << std::endl;
                 return "";
             }
-
-            plusPos = value.find(" + ", plusPos + 1);
+        } else {
+            // Simple string without variables
+            end = command.find("\")", start);
+            if (start == end || end == std::string::npos) {
+                return "";
+            }
+            return command.substr(start, end - start);
         }
-
-        return value;
     } else {
         prefix = type + "(";
         pos = command.find(prefix);
