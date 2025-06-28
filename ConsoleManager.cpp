@@ -261,7 +261,7 @@ void ConsoleManager::commandInitialize() {
         std::cout << "  Batch Process Frequency: " << config.batchProcessFreq << std::endl;
         std::cout << "  Min Instructions: " << config.minIns << std::endl;
         std::cout << "  Max Instructions: " << config.maxIns << std::endl;
-        std::cout << "  Delays per Execution: " << config.delaysPerExec << std::endl;
+        std::cout << "  Delays per Execution: " << config.delaysPerExec << std: :endl;
         std::cout << "System initialized successfully." << std::endl;
         
         // Pass config to ProcessManager
