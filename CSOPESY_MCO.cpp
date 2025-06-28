@@ -7,10 +7,9 @@
 #include <map>
 #include <memory>
 #include <algorithm>
+#include <cstdint>
 
 using namespace std;
-
-
 
 class Screen {
 private:
@@ -335,7 +334,6 @@ public:
                             correctArgs = false;
                         } else {
                             value = static_cast<uint16_t>(conTemp);
-
                         }
                     }
                     else {
