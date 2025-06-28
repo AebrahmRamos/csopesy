@@ -23,6 +23,10 @@ ProcessManager::~ProcessManager() {
 void ProcessManager::setConfig(const Config& config) {
     numCores = config.numCpu;
     storedConfigPtr = const_cast<Config*>(&config);
+    
+    if (scheduler) {
+        scheduler->setSchedulerConfig(config.scheduler, config.quantumCycles, config.numCpu);
+    }
 }
 
 void ProcessManager::startProcessGeneration() {

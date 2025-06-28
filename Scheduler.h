@@ -8,10 +8,17 @@
 #include <atomic>
 #include <vector>
 #include <memory>
+#include <string>
+#include <chrono>
 
 // Forward declaration to avoid circular dependency
 class Process;
 class ProcessManager;
+
+enum class SchedulerType {
+    FCFS,  // First Come First Served
+    RR     // Round Robin
+};
 
 class Scheduler {
 private:
@@ -23,6 +30,11 @@ private:
     std::atomic<bool> running;
     std::atomic<int> activeProcesses;
     ProcessManager* processManager;
+    
+    // Scheduling configuration
+    SchedulerType schedulerType;
+    int quantumCycles;
+    int numCores;
 
 public:
     Scheduler(ProcessManager* pm);
@@ -33,12 +45,21 @@ public:
     void addProcess(std::shared_ptr<Process> process);
     bool isProcessing() const;
     
+    // Configuration methods
+    void setSchedulerConfig(const std::string& algorithm, int quantum, int cores);
+    
 private:
     void cpuWorker(int coreId);
     void executeProcess(std::shared_ptr<Process> process, int coreId);
+    void executeProcessFCFS(std::shared_ptr<Process> process, int coreId);
+    void executeProcessRR(std::shared_ptr<Process> process, int coreId);
     void executeInstruction(std::shared_ptr<Process> process, const std::string& instruction);
     void executeArithmeticInstruction(std::shared_ptr<Process> process, const std::string& instruction, const std::string& operation);
     uint16_t getValueFromArgument(std::shared_ptr<Process> process, const std::string& arg);
+    
+    // Helper methods
+    SchedulerType parseSchedulerType(const std::string& algorithm);
+    void requeueProcess(std::shared_ptr<Process> process);
 };
 
 #endif

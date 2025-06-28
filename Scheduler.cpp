@@ -7,7 +7,8 @@
 #include <sstream>
 #include <iostream>
 
-Scheduler::Scheduler(ProcessManager* pm) : running(false), activeProcesses(0), processManager(pm) {}
+Scheduler::Scheduler(ProcessManager* pm) : running(false), activeProcesses(0), processManager(pm),
+    schedulerType(SchedulerType::FCFS), quantumCycles(5), numCores(4) {}
 
 Scheduler::~Scheduler() {
     stop();
@@ -15,7 +16,7 @@ Scheduler::~Scheduler() {
 
 void Scheduler::start() {
     running = true;
-    for (int i = 0; i < NUM_CORES; ++i) {
+    for (int i = 0; i < numCores; ++i) {
         cpuThreads.emplace_back(&Scheduler::cpuWorker, this, i);
     }
 }
@@ -73,7 +74,18 @@ void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
         processManager->updateProcessCore(process->getProcessId(), coreId);
     }
     
-    // Execute instructions automatically for auto-executing processes
+    // choose scheduling algorithm
+    if (schedulerType == SchedulerType::RR) {
+        executeProcessRR(process, coreId);
+    } else {
+        executeProcessFCFS(process, coreId);
+    }
+    
+    activeProcesses--;
+}
+
+void Scheduler::executeProcessFCFS(std::shared_ptr<Process> process, int coreId) {
+    // FCFS: Execute process to completion
     if (process->isAutoExecuting()) {
         while (process->hasMoreInstructions() && process->getIsActive()) {
             std::string currentInstruction = process->getCurrentInstruction();
@@ -87,7 +99,7 @@ void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
             // Advance to next instruction
             process->advanceInstruction();
             
-            // Simulate CPU work delay (from config delays-per-exec)
+            // Simulate CPU work delay
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     } else {
@@ -97,8 +109,53 @@ void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
-    
-    activeProcesses--;
+}
+
+void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
+    // Round Robin: Execute for quantum cycles, then preempt if needed
+    if (process->isAutoExecuting()) {
+        int cyclesUsed = 0;
+        
+        while (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed < quantumCycles) {
+            std::string currentInstruction = process->getCurrentInstruction();
+            
+            // Execute the instruction
+            executeInstruction(process, currentInstruction);
+            
+            // Add to execution log
+            process->addToExecutionLog(currentInstruction);
+            
+            // Advance to next instruction
+            process->advanceInstruction();
+            
+            // Increment cycles used
+            cyclesUsed++;
+            
+            // Simulate CPU work delay
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        
+        // If process still has more instructions and quantum expired, requeue it
+        if (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed >= quantumCycles) {
+            requeueProcess(process);
+            activeProcesses++;
+        }
+    } else {
+        int cyclesUsed = 0;
+        while (process->getCurrentLine() <= process->getTotalLines() && 
+               process->getIsActive() && 
+               cyclesUsed < quantumCycles) {
+            process->incrementLine();
+            cyclesUsed++;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        
+        // Requeue if not finished
+        if (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive()) {
+            requeueProcess(process);
+            activeProcesses++;
+        }
+    }
 }
 
 void Scheduler::executeInstruction(std::shared_ptr<Process> process, const std::string& instruction) {
@@ -231,4 +288,26 @@ uint16_t Scheduler::getValueFromArgument(std::shared_ptr<Process> process, const
         process->ensureVariableExists(arg);
         return process->getVariable(arg);
     }
+}
+
+// Configuration methods
+void Scheduler::setSchedulerConfig(const std::string& algorithm, int quantum, int cores) {
+    schedulerType = parseSchedulerType(algorithm);
+    quantumCycles = quantum;
+    numCores = cores;
+}
+
+SchedulerType Scheduler::parseSchedulerType(const std::string& algorithm) {
+    if (algorithm == "rr") {
+        return SchedulerType::RR;
+    }
+    return SchedulerType::FCFS; // Default to FCFS
+}
+
+void Scheduler::requeueProcess(std::shared_ptr<Process> process) {
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        readyQueue.push(process);
+    }
+    cv.notify_one();
 }
