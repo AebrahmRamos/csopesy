@@ -51,6 +51,8 @@ public:
     int getNumCores() const;
     int getUsedCores() const;
     double getCpuUtilization() const;
+
+    void sleepCurrentProcess(int ticks);
 };
 
 #endif

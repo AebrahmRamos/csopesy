@@ -98,6 +98,18 @@ void Screen::simulateProgress() {
     }
 }
 
+void Screen::enterLoop() {
+    loopDepth++;
+}
+
+void Screen::exitLoop() {
+    loopDepth--;
+}
+
+int Screen::loopDepth() const {
+    return loopDepth;
+}
+
 std::string Screen::getName() const { return processName; }
 int Screen::getCurrentLine() const { return currentLine; }
 int Screen::getTotalLines() const { return totalLines; }

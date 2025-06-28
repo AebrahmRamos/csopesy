@@ -15,7 +15,8 @@ private:
     std::string creationDate;
     bool isActive;
     int arrivalTime;
-    std::shared_ptr<Process> attachedProcess; 
+    std::shared_ptr<Process> attachedProcess;
+    int loopDepth = 0;
 public:
     Screen(const std::string& name, int totalCommands = 100);
     void display();
@@ -31,6 +32,9 @@ public:
     bool getIsActive() const;
     void setActive(bool active);
     int getArrivalTime() const;
+    void enterLoop();
+    void exitLoop();
+    int getLoopDepth() const; 
 };
 
 #endif
