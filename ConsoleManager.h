@@ -73,6 +73,12 @@ private:
     std::vector<ProcessInfo> getDummyProcessData();
     std::vector<ProcessInfo> getRealProcessData();
     std::string extractCommandValue(const std::string& command, const std::string type);
+    
+    // Helper functions for ADD/SUBTRACT operations
+    void ensureVariableExists(const std::string& varName);
+    uint16_t getVariableValue(const std::string& varName);
+    void setVariableValue(const std::string& varName, uint16_t value);
+    std::vector<std::string> parseCommaSeparatedArgs(const std::string& argString);
 public:
     ConsoleManager();
     ~ConsoleManager();
