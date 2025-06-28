@@ -187,3 +187,9 @@ int ProcessManager::getProcessCore(int processId) const {
     auto it = processCoreMap.find(processId);
     return (it != processCoreMap.end()) ? it->second : -1;
 }
+
+void ProcessManager::sleepCurrentProcess(int ticks) {
+    // Simulate sleeping by adding a delay for the specified number of ticks
+    std::cout << "Process sleeping for " << ticks << " ticks.\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 10)); // Simulate each tick as 10ms
+}

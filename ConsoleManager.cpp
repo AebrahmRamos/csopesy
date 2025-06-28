@@ -35,6 +35,18 @@ bool ConsoleManager::findCommand(const std::string& text, const std::string& com
     return text.find(command) != std::string::npos;
 }
 
+std::vector<std::string> split(const std::string& str, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(str);
+    
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    
+    return tokens;
+}
+
 std::string ConsoleManager::extractCommandValue(const std::string& command, const std::string type) {
     std::string prefix, value;
     int pos, start, end;
@@ -688,6 +700,36 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
         }
         else {
             std::cout << "SUBTRACT arg cannot be empty." << std::endl;
+        }
+    }
+    else if (command.find("SLEEP(") != std::string::npos) {
+        std::string value = extractCommandValue(command, "SLEEP");
+        if (!value.empty()) {
+            int ticks = std::stoi(value);
+            if (ticks < 0) ticks = 0;
+            processManager->sleepCurrentProcess(ticks);
+        }
+    }
+
+    else if (command.find("FOR(") != std::string::npos) {
+        std::string block = extractCommandValue(command, "FOR");
+        size_t commaPos = block.find(",");
+        if (commaPos != std::string::npos) {
+            std::string instructions = block.substr(0, commaPos);
+            int repeats = std::stoi(block.substr(commaPos + 1));
+            if (repeats <= 0) repeats = 1;
+
+            for (int i = 0; i < repeats; ++i) {
+                if (currentScreen->getLoopDepth() >= 3) {
+                    std::cout << "Error: Maximum loop nesting exceeded.\n";
+                    break;
+                }
+                currentScreen->enterLoop();
+                for (const auto& instr : split(instructions, ';')) {
+                    processScreenCommand(instr);
+                }
+                currentScreen->exitLoop();
+            }
         }
     }
     else {
