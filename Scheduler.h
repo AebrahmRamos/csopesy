@@ -36,6 +36,9 @@ public:
 private:
     void cpuWorker(int coreId);
     void executeProcess(std::shared_ptr<Process> process, int coreId);
+    void executeInstruction(std::shared_ptr<Process> process, const std::string& instruction);
+    void executeArithmeticInstruction(std::shared_ptr<Process> process, const std::string& instruction, const std::string& operation);
+    uint16_t getValueFromArgument(std::shared_ptr<Process> process, const std::string& arg);
 };
 
 #endif

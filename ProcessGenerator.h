@@ -7,6 +7,7 @@
 #include <random>
 #include <chrono>
 #include "Process.h"
+#include "InstructionGenerator.h"
 
 class ProcessManager; // Forward declaration
 
@@ -21,6 +22,7 @@ private:
     ProcessManager* processManager;
     std::mt19937 rng;
     std::uniform_int_distribution<int> instructionDist;
+    InstructionGenerator instructionGenerator;
     
     void generatorLoop();
     

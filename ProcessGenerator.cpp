@@ -55,6 +55,9 @@ std::shared_ptr<Process> ProcessGenerator::createDummyProcess() {
     
     auto process = std::make_shared<Process>(name, processId, instructionCount);
     
+    auto instructions = instructionGenerator.generateRandomInstructions(name, minIns, maxIns);
+    process->setInstructions(instructions);
+    
     return process;
 }
 

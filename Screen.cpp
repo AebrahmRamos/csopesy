@@ -46,35 +46,63 @@ void Screen::showProcessInfo() {
         return;
     }
     
-    std::cout << "\nProcess name: " << attachedProcess->getName() << std::endl;
-    std::cout << "ID: " << attachedProcess->getProcessId() << std::endl;
-    
-    // Show logs - simplified for now since full instruction system will be implemented by teammates
-    std::cout << "Logs:" << std::endl;
-    
-    // Show a few sample log entries to match the mockup format
-    int currentLine = attachedProcess->getCurrentLine();
-    int startLog = std::max(1, currentLine - 5); // Show last 5 entries
-    
-    for (int i = startLog; i < currentLine && i <= attachedProcess->getTotalLines(); i++) {
-        // Get current timestamp
-        time_t t = time(nullptr);
-        tm* now = localtime(&t);
-        char timeBuffer[100];
-        strftime(timeBuffer, sizeof(timeBuffer), "%m/%d/%Y %H:%M:%S", now);
-        
-        int coreId = attachedProcess->getAssignedCore();
-        if (coreId < 0) coreId = 0;
-        
-        std::cout << "(" << timeBuffer << ") Core:" << coreId 
-                  << " \"Hello world from " << attachedProcess->getName() << "!\"" << std::endl;
-    }
-    
-    std::cout << "\nCurrent instruction line: " << attachedProcess->getCurrentLine() << std::endl;
-    std::cout << "Lines of code: " << attachedProcess->getTotalLines() << std::endl;
+    std::cout << "\nProcess Name: " << attachedProcess->getName() << std::endl;
+    std::cout << "Process ID:   " << attachedProcess->getProcessId() << std::endl;
     
     if (!attachedProcess->getIsActive()) {
-        std::cout << "\nFinished!" << std::endl;
+        std::cout << "Status:       Finished!" << std::endl;
+    } else {
+        std::cout << "Status:       Running" << std::endl;
+    }
+    
+    std::cout << "\n--- Instruction Log ---" << std::endl;
+    
+    if (attachedProcess->isAutoExecuting()) {
+        // Display instruction execution in the approved format
+        auto executionLog = attachedProcess->getExecutionLog();
+        int currentIndex = attachedProcess->getCurrentInstructionIndex();
+        int totalInstructions = attachedProcess->getTotalLines();
+        
+        // Show executed instructions
+        for (int i = 0; i < static_cast<int>(executionLog.size()); i++) {
+            std::cout << "[" << std::setfill('0') << std::setw(3) << (i + 1) 
+                      << "/" << std::setfill('0') << std::setw(3) << totalInstructions 
+                      << "] EXECUTED: " << executionLog[i] << std::endl;
+        }
+        
+        // Show current instruction
+        if (attachedProcess->hasMoreInstructions()) {
+            std::string currentInstruction = attachedProcess->getCurrentInstruction();
+            std::cout << "[" << std::setfill('0') << std::setw(3) << (currentIndex + 1)
+                      << "/" << std::setfill('0') << std::setw(3) << totalInstructions
+                      << "] > CURRENT: " << currentInstruction << std::endl;
+        }
+        
+        // Show a few pending instructions (if any)
+        int pendingCount = std::min(3, totalInstructions - currentIndex - 1);
+        for (int i = 1; i <= pendingCount; i++) {
+            int pendingIndex = currentIndex + i;
+            if (pendingIndex < totalInstructions) {
+                // We don't have direct access to pending instructions, so show placeholder
+                std::cout << "[" << std::setfill('0') << std::setw(3) << (pendingIndex + 1)
+                          << "/" << std::setfill('0') << std::setw(3) << totalInstructions
+                          << "] PENDING:  [Next instruction]" << std::endl;
+            }
+        }
+        
+        // Show variables
+        std::cout << "\n--- Variables ---" << std::endl;
+        auto variables = attachedProcess->getAllVariables();
+        if (variables.empty()) {
+            std::cout << "No variables declared yet." << std::endl;
+        } else {
+            for (const auto& var : variables) {
+                std::cout << var.first << ": " << var.second << std::endl;
+            }
+        }
+    } else {
+        // For manually created processes (legacy behavior)
+        std::cout << "Manual process - no auto-execution log available." << std::endl;
     }
     
     std::cout << std::endl;
