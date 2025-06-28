@@ -35,18 +35,65 @@ bool ConsoleManager::findCommand(const std::string& text, const std::string& com
     return text.find(command) != std::string::npos;
 }
 
-std::string ConsoleManager::extractPrintMsg(const std::string& command) {
-    std::string prefix = "PRINT(";
-    int pos = command.find(prefix);
-    int start = pos + prefix.size();
-    int end = command.find(')', start);
-    if (start == end) {
-        return "";
-    }
+std::string ConsoleManager::extractCommandValue(const std::string& command, const std::string type) {
+    std::string prefix, value;
+    int pos, start, end;
     
-    std::string msg = command.substr(start, end - start);
-    return msg;
+    if (type == "PRINT") {
+        prefix = "PRINT(\"";
+        pos = command.find(prefix);
+        start = pos + prefix.size();
+
+        if (start == std::string::npos) {
+            return ""; // Return empty if "PRINT(" not found
+        }
+
+        int plusPos = command.find("\" + ", start);
+        if (plusPos != std::string::npos) {
+            end = command.find(')', start);\
+        } else {
+            end = command.find("\")", start);
+        }
+        if (start == end || end == std::string::npos) {
+            return "";
+        }
+
+        value = command.substr(start, end - start);
+
+        while (plusPos != std::string::npos) {
+            std::string beforeVar = value.substr(0, plusPos);
+            std::string varName = value.substr(plusPos + 3);
+
+            if (this->declaredVariables.find(varName) != declaredVariables.end()) {
+                uint16_t varValue = declaredVariables[varName];
+                value = beforeVar + std::to_string(varValue) + value.substr(plusPos + 3 + varName.length());
+            } else {
+                std::cout << "Error: Variable '" << varName << "' is not declared." << std::endl;
+                return "";
+            }
+
+            plusPos = value.find(" + ", plusPos + 1);
+        }
+
+        return value;
+    } else {
+        prefix = type + "(";
+        pos = command.find(prefix);
+        start = pos + prefix.size();
+        end = command.find(')', start);
+
+        if (start == end || end == std::string::npos) {
+            return "";
+        }
+
+        std::string value = command.substr(start, end - start);
+        return value;
+    }
+
+    return "";
 }
+
+
 
 bool ConsoleManager::loadConfig(const std::string& filename) {
     std::ifstream file(filename);
@@ -439,10 +486,16 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
 }
 
 void ConsoleManager::processScreenCommand(const std::string& command) {
-    std::string printPrefix = "PRINT(";
+    std::string printPrefix = "PRINT(\"";
+    std::string declarePrefix = "DECLARE(";
+
     int printPos = command.find(printPrefix);
     int printStart = printPos + printPrefix.size();
     int printEnd = command.find(')', printStart);
+
+    int declarePos = command.find(declarePrefix);
+    int declareStart = declarePos + declarePrefix.size();
+    int declareEnd = command.find(')', declareStart);
 
     if (command == "exit") {
         commandExit();
@@ -459,7 +512,7 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
         }
     }
     else if (printPos != std::string::npos && printEnd != std::string::npos) {
-        std::string printMsg = extractPrintMsg(command);
+        std::string printMsg = extractCommandValue(command, "PRINT");
         if (!printMsg.empty()) {
             std::cout << printMsg << std::endl;
             currentScreen->simulateProgress();
@@ -468,6 +521,51 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
         }
         else {
             std::cout << "PRINT arg cannot be empty." << std::endl;
+        }
+    }
+    else if (declarePos != std::string::npos && declareEnd != std::string::npos) {
+        std::string declareValue = extractCommandValue(command, "DECLARE");
+        if(declareValue!= ""){
+            int commaPos = declareValue.find(',');
+            bool correctArgs = true;
+            if (commaPos != std::string::npos) {
+                std::string var = declareValue.substr(0, commaPos);
+                int spacePos = declareValue.find(' ');
+                std::string temp;
+                if(spacePos != std::string::npos){
+                    temp = declareValue.substr(commaPos + 2);
+                } else {
+                    temp = declareValue.substr(commaPos + 1);
+                }
+                
+                bool isNumber = std::all_of(temp.begin(), temp.end(), ::isdigit);
+
+                uint16_t value;
+                if(isNumber){
+                    int conTemp = std::stoi(temp);
+                    if (conTemp < 0 || conTemp > 65535) {
+                        std::cout << "Value out of range for uint16_t." << std::endl;
+                        correctArgs = false;
+                    } else {
+                        value = static_cast<uint16_t>(conTemp);
+                    }
+                }
+                else {
+                    correctArgs = false;
+                }
+
+                if (correctArgs == true){
+                        declaredVariables[var] = value;
+                }
+                else {
+                    std::cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << std::endl;
+                }
+            } 
+            else {
+                std::cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << std::endl;
+            }
+        } else{
+            std::cout << "DECLARE arg cannot be empty."<< std::endl;
         }
     }
     else {

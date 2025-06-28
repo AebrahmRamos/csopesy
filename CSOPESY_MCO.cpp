@@ -57,6 +57,8 @@ public:
 class ConsoleManager {
 private:
     map<string, shared_ptr<Screen>> screens;
+    map<string, uint16_t>> declareValues;
+
     shared_ptr<Screen> currentScreen;
     bool inMainMenu;
     bool initialized = false;
@@ -261,26 +263,37 @@ public:
     
 
     string extractCommandValue(const std::string& command, const std::string type) {
-        string prefix = type + "(";
-        int pos = command.find(prefix);
-        int start = pos + prefix.size();
-        int end = command.find(')', start);
-        if (start == end){
-            return "";
+        
+        if(type == "PRINT"){
+            string prefix = type + "(";
+            int pos = command.find(prefix);
+            int start = pos + prefix.size();
+            int end = command.find(')', start);
+            if (start == end){
+                return "";
+            }
+        } else {
+            string prefix = type + "(";
+            int pos = command.find(prefix);
+            int start = pos + prefix.size();
+            int end = command.find(')', start);
+            if (start == end){
+                return "";
+            }
         }
+
 
         string value = command.substr(start, end - start);
         return value;
     }
 
     void processScreenCommand(const string& command) {
-        string printPrefix = "PRINT(";
+        string printPrefix = "PRINT(\"";
         string declarePrefix = "DECLARE(";
-        char commandSuffix = ')';
 
         int printPos = command.find(printPrefix);
         int printStart = printPos + printPrefix.size();
-        int printEnd = command.find(')', printStart);
+        int printEnd = command.find("\")", printStart);
 
         int declarePos = command.find(declarePrefix);
         int declareStart = declarePos + declarePrefix.size();
@@ -341,8 +354,7 @@ public:
                     }
 
                     if (correctArgs == true){
-                        cout << "var: " << var << endl;
-                        cout << "value: " << value << endl;
+                          declareValues[var] = value;
                     }
                     else {
                         cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << endl;
@@ -354,6 +366,11 @@ public:
             }
             else{
                 cout << "DECLARE arg cannot be empty."<< endl;
+            }
+        }
+        else if(command == "see"){
+            for (const auto& pair : declareValues) {
+                std::cout << pair.first << ": " << pair.second << std::endl;
             }
         }
         else {

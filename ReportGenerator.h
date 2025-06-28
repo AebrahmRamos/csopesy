@@ -26,7 +26,7 @@ private:
 public:
     UtilizationData calculateUtilization(ProcessManager* pm);
     void generateReport(ProcessManager* pm, const std::string& filename = "csopesy-log.txt");
-    void displayReport(ProcessManager* pm)
+    void displayReport(ProcessManager* pm);
 };
 
 #endif

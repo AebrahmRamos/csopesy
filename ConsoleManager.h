@@ -55,6 +55,7 @@ class ConsoleManager {
 private:
     std::shared_ptr<Screen> currentScreen;
     std::map<std::string, std::shared_ptr<Screen>> screens;
+    std::map<std::string, uint16_t> declaredVariables;
     bool inMainMenu;
     bool initialized;
     Config config;
@@ -71,6 +72,7 @@ private:
     std::vector<GPUInfo> getDummyGPUData();
     std::vector<ProcessInfo> getDummyProcessData();
     std::vector<ProcessInfo> getRealProcessData();
+    std::string extractCommandValue(const std::string& command, const std::string type);
 public:
     ConsoleManager();
     ~ConsoleManager();
