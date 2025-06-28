@@ -7,6 +7,7 @@
 #include <vector>
 #include "Screen.h"
 #include "ProcessManager.h"
+#include "ReportGenerator.h"
 
 struct GPUInfo {
     int id;
@@ -58,6 +59,7 @@ private:
     bool initialized;
     Config config;
     std::unique_ptr<ProcessManager> processManager;
+    std::unique_ptr<ReportGenerator> reportGenerator;
     std::string extractName(const std::string& command);
     bool findCommand(const std::string& text, const std::string& command);
     std::string extractPrintMsg(const std::string& command);
@@ -68,6 +70,7 @@ private:
     void printProcessInfo(const ProcessInfo& process);
     std::vector<GPUInfo> getDummyGPUData();
     std::vector<ProcessInfo> getDummyProcessData();
+    std::vector<ProcessInfo> getRealProcessData();
 public:
     ConsoleManager();
     ~ConsoleManager();
@@ -75,6 +78,7 @@ public:
     void printHeader();
     void commandHelp();
     void commandInitialize();
+    void commandSchedulerStart();
     void commandSchedulerTest();
     void commandSchedulerStop();
     void commandReportUtil();

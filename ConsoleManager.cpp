@@ -11,6 +11,7 @@
 
 ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true), initialized(false) {
     processManager = std::make_unique<ProcessManager>();
+    reportGenerator = std::make_unique<ReportGenerator>();
     processManager->initialize();
     processManager->startScheduler();
 }
@@ -172,8 +173,8 @@ void ConsoleManager::commandHelp() {
         std::cout << "  initialize     - Initialize the system\n";
         std::cout << "  screen -s <n>  - Create a new screen session\n";
         std::cout << "  screen -r <n>  - Resume an existing screen session\n";
-        std::cout << "  screen -ls     - List all screen sessions\n";
-        std::cout << "  scheduler-test - Run scheduler test\n";
+        std::cout << "  screen -ls     - List all screen sessions and CPU utilization\n";
+        std::cout << "  scheduler-start - Start automatic process generation\n";
         std::cout << "  scheduler-stop - Stop scheduler\n";
         std::cout << "  report-util    - Generate report\n";
         std::cout << "  clear          - Clear the screen\n";
@@ -182,6 +183,7 @@ void ConsoleManager::commandHelp() {
         std::cout << "  nvidia-smi     - Shows GPU summary and running processes\n";
     } else {
         std::cout << "\n\033[32m=== Screen Session Help ===\033[0m\n";
+        std::cout << "  process-smi - Show process information\n";
         std::cout << "  exit - Return to main menu\n";
         std::cout << "  help - Show this help menu\n";
         std::cout << "  Any other command will simulate process execution\n";
@@ -201,11 +203,25 @@ void ConsoleManager::commandInitialize() {
         std::cout << "  Max Instructions: " << config.maxIns << std::endl;
         std::cout << "  Delays per Execution: " << config.delaysPerExec << std::endl;
         std::cout << "System initialized successfully." << std::endl;
+        
+        // Pass config to ProcessManager
+        processManager->setConfig(config);
+        
         initialized = true;
     } else {
         printConfigError(config.errorMessage);
         std::cout << "System initialization failed. Please fix config.txt and try again." << std::endl;
         initialized = false;
+    }
+}
+
+void ConsoleManager::commandSchedulerStart() {
+    if (processManager) {
+        if (!processManager->isGeneratingProcesses()) {
+            processManager->startProcessGeneration();
+        } else {
+            std::cout << "Process generation is already running." << std::endl;
+        }
     }
 }
 
@@ -216,11 +232,16 @@ void ConsoleManager::commandSchedulerTest() {
 }
 
 void ConsoleManager::commandSchedulerStop() {
-    std::cout << "scheduler-stop command recognized. Scheduler stopped." << std::endl;
+    if (processManager) {
+        processManager->stopProcessGeneration();
+    }
 }
 
 void ConsoleManager::commandReportUtil() {
-    std::cout << "report-util command recognized. Generating report." << std::endl;
+    if (reportGenerator && processManager) {
+        reportGenerator->generateReport(processManager.get(), "csopesy-log.txt");
+        std::cout << "Report generated and saved to csopesy-log.txt" << std::endl;
+    }
 }
 
 void ConsoleManager::commandNvidiaSmi() {
@@ -247,8 +268,8 @@ void ConsoleManager::commandNvidiaSmi() {
     std::cout << "|        ID   ID                                                               Usage      |\n";
     std::cout << "|=========================================================================================|\n";
     
-    // Get dummy process data and print it
-    std::vector<ProcessInfo> processes = getDummyProcessData();
+    // Get real process data instead of dummy data
+    std::vector<ProcessInfo> processes = getRealProcessData();
     for (const auto& process : processes) {
         printProcessInfo(process);
     }
@@ -281,6 +302,18 @@ void ConsoleManager::commandExit() {
 
 void ConsoleManager::createScreen(const std::string& name) {
     auto screen = std::make_shared<Screen>(name);
+    
+    // Try to find and attach a real process with this name
+    if (processManager) {
+        auto process = processManager->findProcessByName(name);
+        if (process) {
+            screen->attachToProcess(process);
+            std::cout << "Screen attached to existing process: " << name << std::endl;
+        } else {
+            std::cout << "No process found with name '" << name << "'. Screen created without attached process." << std::endl;
+        }
+    }
+    
     screens[name] = screen;
     currentScreen = screen;
     inMainMenu = false;
@@ -303,15 +336,11 @@ void ConsoleManager::resumeScreen(const std::string& name) {
 }
 
 void ConsoleManager::listScreens() {
-    if (screens.empty()) {
+    if (reportGenerator && processManager) {
+        reportGenerator->displayReport(processManager.get());
+    } else {
         std::cout << "No screen sessions found." << std::endl;
-        return;
     }
-    std::cout << "\n\033[32m=== Active Screen Sessions ===\033[0m\n";
-    for (const auto& pair : screens) {
-        std::cout << "  • " << pair.first << " (Created: " << pair.second->getCreationDate() << ")" << std::endl;
-    }
-    std::cout << std::endl;
 }
 
 void ConsoleManager::handleScreenCommand(const std::string& command) {
@@ -321,7 +350,9 @@ void ConsoleManager::handleScreenCommand(const std::string& command) {
         std::cout << "Usage: screen -s <name> or screen -r <name>" << std::endl;
         return;
     }
+    
     auto it = screens.find(processName);
+    
     if (findCommand(command, "screen -s")) {
         if (it != screens.end()) {
             std::cout << "Screen '" << processName << "' already exists. Use 'screen -r " << processName << "' to resume." << std::endl;
@@ -330,10 +361,39 @@ void ConsoleManager::handleScreenCommand(const std::string& command) {
         }
     }
     else if (findCommand(command, "screen -r")) {
+        // Check if screen already exists
         if (it != screens.end()) {
+            // Check if attached process is finished
+            if (it->second->hasAttachedProcess() && !it->second->getAttachedProcess()->getIsActive()) {
+                std::cout << "Process '" << processName << "' has finished execution and can no longer be accessed." << std::endl;
+                return;
+            }
             resumeScreen(processName);
         } else {
-            std::cout << "Screen '" << processName << "' not found. Use 'screen -s " << processName << "' to create." << std::endl;
+            // Screen doesn't exist, check if process exists
+            if (processManager) {
+                auto process = processManager->findProcessByName(processName);
+                if (process) {
+                    // Check if process is finished
+                    if (!process->getIsActive()) {
+                        std::cout << "Process '" << processName << "' has finished execution and can no longer be accessed." << std::endl;
+                        return;
+                    }
+                    // Process exists and is active, create screen and attach process
+                    auto screen = std::make_shared<Screen>(processName);
+                    screen->attachToProcess(process);
+                    screens[processName] = screen;
+                    currentScreen = screen;
+                    inMainMenu = false;
+                    clearScreen();
+                    std::cout << "Resuming screen session '" << processName << "'..." << std::endl;
+                    screen->display();
+                } else {
+                    std::cout << "Process '" << processName << "' not found." << std::endl;
+                }
+            } else {
+                std::cout << "Process manager not available." << std::endl;
+            }
         }
     }
 }
@@ -342,8 +402,8 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     if (command == "initialize") {
         commandInitialize();
     }
-    else if (command == "scheduler-test" && initialized) {
-        commandSchedulerTest();
+    else if (command == "scheduler-start" && initialized) {
+        commandSchedulerStart();
     }
     else if (command == "scheduler-stop" && initialized) {
         commandSchedulerStop();
@@ -392,6 +452,11 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
     }
     else if (command == "clear") {
         commandClear();
+    }
+    else if (command == "process-smi") {
+        if (currentScreen) {
+            currentScreen->showProcessInfo();
+        }
     }
     else if (printPos != std::string::npos && printEnd != std::string::npos) {
         std::string printMsg = extractPrintMsg(command);
@@ -508,6 +573,30 @@ std::vector<GPUInfo> ConsoleManager::getDummyGPUData() {
     
     gpus.push_back(gpu);
     return gpus;
+}
+
+std::vector<ProcessInfo> ConsoleManager::getRealProcessData() {
+    std::vector<ProcessInfo> processes;
+    
+    if (!processManager) {
+        return processes;
+    }
+    
+    auto allProcesses = processManager->getAllProcesses();
+    for (const auto& process : allProcesses) {
+        ProcessInfo info;
+        info.gpu = 0; // CPU processes, not GPU
+        info.gi = "N/A";
+        info.ci = "N/A";
+        info.pid = process->getProcessId();
+        info.type = "C"; // CPU process
+        info.processName = process->getName();
+        info.memoryUsage = 64; // Simulated memory usage
+        
+        processes.push_back(info);
+    }
+    
+    return processes;
 }
 
 std::vector<ProcessInfo> ConsoleManager::getDummyProcessData() {

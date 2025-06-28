@@ -1,7 +1,6 @@
 #include "Scheduler.h"
 #include "Process.h"
 #include "ProcessManager.h"
-#include <fstream>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
@@ -67,33 +66,15 @@ void Scheduler::cpuWorker(int coreId) {
     }
 }
 
-std::string getCurrentTimestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%m/%d/%Y %H:%M:%S");
-    return ss.str();
-}
-
 void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
-    // Update process manager with core assignment
     if (processManager) {
         processManager->updateProcessCore(process->getProcessId(), coreId);
     }
     
-    std::string outputFileName = process->getName() + "_output.txt";
-    std::ofstream outputFile(outputFileName, std::ios::app);
-    
     while (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive()) {
-        std::string timestamp = getCurrentTimestamp();
-        outputFile << "(" << timestamp << ") Core " << coreId 
-                  << ": Executing print command " << process->getCurrentLine() 
-                  << " of process " << process->getName() << std::endl;
-                  
         process->incrementLine();
         std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Simulate work
     }
     
     activeProcesses--;
-    outputFile.close();
 }
