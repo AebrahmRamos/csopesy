@@ -487,17 +487,6 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
 }
 
 void ConsoleManager::processScreenCommand(const std::string& command) {
-    std::string printPrefix = "PRINT(\"";
-    std::string declarePrefix = "DECLARE(";
-
-    int printPos = command.find(printPrefix);
-    int printStart = printPos + printPrefix.size();
-    int printEnd = command.find(')', printStart);
-
-    int declarePos = command.find(declarePrefix);
-    int declareStart = declarePos + declarePrefix.size();
-    int declareEnd = command.find(')', declareStart);
-
     if (command == "exit") {
         commandExit();
     }
@@ -512,7 +501,7 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
             currentScreen->showProcessInfo();
         }
     }
-    else if (printPos != std::string::npos && printEnd != std::string::npos) {
+    else if (command.find("PRINT(\"") != std::string::npos) {
         std::string printMsg = extractCommandValue(command, "PRINT");
         if (!printMsg.empty()) {
             std::cout << printMsg << std::endl;
@@ -524,9 +513,9 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
             std::cout << "PRINT arg cannot be empty." << std::endl;
         }
     }
-    else if (declarePos != std::string::npos && declareEnd != std::string::npos) {
+    else if (command.find("DECLARE(") != std::string::npos) {
         std::string declareValue = extractCommandValue(command, "DECLARE");
-        if(declareValue!= ""){
+        if(declareValue != ""){
             int commaPos = declareValue.find(',');
             bool correctArgs = true;
             if (commaPos != std::string::npos) {
@@ -556,7 +545,11 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
                 }
 
                 if (correctArgs == true){
-                        declaredVariables[var] = value;
+                    declaredVariables[var] = value;
+                    std::cout << "Variable '" << var << "' declared with value " << value << std::endl;
+                    currentScreen->simulateProgress();
+                    std::cout << "Command completed. Progress updated." << std::endl;
+                    currentScreen->display();
                 }
                 else {
                     std::cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << std::endl;
@@ -567,6 +560,134 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
             }
         } else{
             std::cout << "DECLARE arg cannot be empty."<< std::endl;
+        }
+    }
+    else if (command.find("ADD(") != std::string::npos) {
+        std::string addValues = extractCommandValue(command, "ADD");
+        if(addValues != ""){
+            std::vector<std::string> args = parseCommaSeparatedArgs(addValues);
+
+            if (args.size() == 3) {
+                std::string targetVar = args[0];
+                std::string source1 = args[1];
+                std::string source2 = args[2];
+                
+                // Ensure target variable exists
+                ensureVariableExists(targetVar);
+                
+                // Process source1
+                uint16_t val1;
+                if (std::all_of(source1.begin(), source1.end(), ::isdigit)) {
+                    int num = std::stoi(source1);
+                    val1 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+                } else {
+                    ensureVariableExists(source1);
+                    val1 = getVariableValue(source1);
+                }
+
+                // Process source2
+                uint16_t val2;
+                if (std::all_of(source2.begin(), source2.end(), ::isdigit)) {
+                    int num = std::stoi(source2);
+                    val2 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+                } else {
+                    ensureVariableExists(source2);
+                    val2 = getVariableValue(source2);
+                }
+                
+                // Perform addition with overflow protection
+                uint32_t result = static_cast<uint32_t>(val1) + static_cast<uint32_t>(val2);
+                uint16_t finalValue = (result > 65535) ? 65535 : static_cast<uint16_t>(result);
+                
+                uint16_t oldValue = getVariableValue(targetVar);
+                setVariableValue(targetVar, finalValue);
+                
+                // Output debug information (from teammates' implementation)
+                std::cout << "debug: " << targetVar << " = " << val1 << " + " << val2 
+                         << " = " << finalValue;
+                if (oldValue != finalValue) {
+                    std::cout << " (" << oldValue << " =" << finalValue << ")";
+                }
+                std::cout << std::endl;
+                
+                if (result > 65535) {
+                    std::cout << "Note: Result capped at 65535 due to uint16_t overflow." << std::endl;
+                }
+                
+                currentScreen->simulateProgress();
+                std::cout << "Command completed. Progress updated." << std::endl;
+                currentScreen->display();
+            }
+            else {
+                std::cout << "Wrong args for ADD. Must be ADD(target, source1, source2)." << std::endl;
+            }
+        }
+        else {
+            std::cout << "ADD arg cannot be empty." << std::endl;
+        }
+    }
+    else if (command.find("SUBTRACT(") != std::string::npos) {
+        std::string subtractValues = extractCommandValue(command, "SUBTRACT");
+        if(subtractValues != ""){
+            std::vector<std::string> args = parseCommaSeparatedArgs(subtractValues);
+
+            if (args.size() == 3) {
+                std::string targetVar = args[0];
+                std::string source1 = args[1];
+                std::string source2 = args[2];
+                
+                // Ensure target variable exists
+                ensureVariableExists(targetVar);
+                
+                // Process source1
+                uint16_t val1;
+                if (std::all_of(source1.begin(), source1.end(), ::isdigit)) {
+                    int num = std::stoi(source1);
+                    val1 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+                } else {
+                    ensureVariableExists(source1);
+                    val1 = getVariableValue(source1);
+                }
+
+                // Process source2
+                uint16_t val2;
+                if (std::all_of(source2.begin(), source2.end(), ::isdigit)) {
+                    int num = std::stoi(source2);
+                    val2 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+                } else {
+                    ensureVariableExists(source2);
+                    val2 = getVariableValue(source2);
+                }
+                
+                // Perform subtraction with underflow protection
+                uint16_t finalValue;
+                if (val1 >= val2) {
+                    finalValue = val1 - val2;
+                } else {
+                    finalValue = 0;  // Prevent underflow
+                }
+                
+                uint16_t oldValue = getVariableValue(targetVar);
+                setVariableValue(targetVar, finalValue);
+               
+                // Output debug information (from teammates' implementation)
+                std::cout << "debug: " << targetVar << " = " << val1 << " - " << val2 
+                         << " = " << finalValue << std::endl;
+                
+                if (val1 < val2) {
+                    std::cout << "Note: Result capped at 0 due to uint16_t underflow prevention." << std::endl;
+                }
+                
+                currentScreen->simulateProgress();
+                std::cout << "Command completed. Progress updated." << std::endl;
+                currentScreen->display();
+            }
+            else {
+                std::cout << "Wrong args for SUBTRACT. Must be SUBTRACT(target, source1, source2)." << std::endl;
+            }
+        }
+        else {
+            std::cout << "SUBTRACT arg cannot be empty." << std::endl;
         }
     }
     else {
@@ -708,4 +829,54 @@ std::vector<ProcessInfo> ConsoleManager::getDummyProcessData() {
     processes.push_back({0, "N/A", "N/A", 5940, "G", "/Applications/Blender.app", 219});
     
     return processes;
+}
+
+// Helper functions for ADD/SUBTRACT operations (from teammates' implementation)
+void ConsoleManager::ensureVariableExists(const std::string& varName) {
+    if (declaredVariables.find(varName) == declaredVariables.end()) {
+        // Auto-declare with random value as per teammates' implementation
+        srand(static_cast<unsigned int>(time(nullptr)));
+        uint16_t randomValue = static_cast<uint16_t>(rand() % 65536);
+        declaredVariables[varName] = randomValue;
+    }
+}
+
+uint16_t ConsoleManager::getVariableValue(const std::string& varName) {
+    auto it = declaredVariables.find(varName);
+    if (it != declaredVariables.end()) {
+        return it->second;
+    } else {
+        return 0;
+    }
+}
+
+void ConsoleManager::setVariableValue(const std::string& varName, uint16_t value) {
+    declaredVariables[varName] = value;
+}
+
+// Process argument parsing for ADD/SUBTRACT (from teammates' implementation)
+std::vector<std::string> ConsoleManager::parseCommaSeparatedArgs(const std::string& argString) {
+    std::vector<std::string> args;
+    size_t start = 0;
+    size_t end = argString.find(',');
+    
+    // Parse first two arguments
+    while (end != std::string::npos && args.size() < 2) {
+        std::string arg = argString.substr(start, end - start);
+        arg.erase(0, arg.find_first_not_of(" \t\n\r\f\v"));
+        arg.erase(arg.find_last_not_of(" \t\n\r\f\v") + 1);
+        args.push_back(arg);
+        start = end + 1;
+        end = argString.find(',', start);
+    }
+    
+    // Parse last argument
+    if (start < argString.length()) {
+        std::string lastArg = argString.substr(start);
+        lastArg.erase(0, lastArg.find_first_not_of(" \t\n\r\f\v"));
+        lastArg.erase(lastArg.find_last_not_of(" \t\n\r\f\v") + 1);
+        args.push_back(lastArg);
+    }
+
+    return args;
 }
