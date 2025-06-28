@@ -18,6 +18,7 @@ private:
     int totalLines;
     string creationDate;
     bool isActive;
+    map<string, uint16_t> variables;
 
 public:
     Screen(const string& name) : processName(name), currentLine(1), totalLines(100), isActive(true) {
@@ -42,6 +43,77 @@ public:
             currentLine++;
         }
     }
+
+    void declareVariable(const string& varName, uint16_t value = 0, bool randomize = false) {
+    if (randomize) {
+        srand(static_cast<unsigned int>(time(nullptr)));
+        value = static_cast<uint16_t>(rand() % 65536);
+    }
+    variables[varName] = value;
+}
+
+    
+    bool isVariableDeclared(const string& varName) const {
+        return variables.find(varName) != variables.end();
+    }
+
+    
+    void ensureVariableExists(const string& varName) {
+    if (!isVariableDeclared(varName)) {
+        declareVariable(varName, 0, true);
+    }
+}
+
+    void setVariable(const string& varName, uint16_t value) {
+        variables[varName] = value;
+    }
+
+    uint16_t getVariable(const string& varName) const {
+        auto it = variables.find(varName);
+        if (it != variables.end()) {
+            return it->second;
+        } else {
+            
+            return 0;
+        }
+    }
+
+    
+    void performAdd(const string& targetVar, const string& source1, const string& source2) {
+        ensureVariableExists(targetVar);
+    
+        uint16_t val1;
+        if (all_of(source1.begin(), source1.end(), ::isdigit)) {
+            int num = stoi(source1);
+            val1 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+        } else {
+            ensureVariableExists(source1);
+            val1 = getVariable(source1);
+        }
+        
+        uint16_t val2;
+        if (all_of(source2.begin(), source2.end(), ::isdigit)) {
+            int num = stoi(source2);
+            val2 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+        } else {
+            ensureVariableExists(source2);
+            val2 = getVariable(source2);
+        }
+        
+        
+        uint32_t result = static_cast<uint32_t>(val1) + static_cast<uint32_t>(val2);
+        uint16_t finalValue = (result > 65535) ? 65535 : static_cast<uint16_t>(result);
+        
+        
+        setVariable(targetVar, finalValue);
+        
+        cout << "ADD operation: " << targetVar << " = " << val1 << " + " << val2 << " = " << finalValue << endl;
+        if (result > 65535) {
+            cout << "Note: Result capped at 65535 due to uint16_t overflow." << endl;
+        }
+    }
+
+    
 
     // Getters
     string getName() const { return processName; }
@@ -290,6 +362,9 @@ public:
     void processScreenCommand(const string& command) {
         string printPrefix = "PRINT(\"";
         string declarePrefix = "DECLARE(";
+        string addPrefix = "ADD(";
+        string subtractPrefix = "SUBTRACT(";
+        char commandSuffix = ')';
 
         int printPos = command.find(printPrefix);
         int printStart = printPos + printPrefix.size();
@@ -299,6 +374,13 @@ public:
         int declareStart = declarePos + declarePrefix.size();
         int declareEnd = command.find(')', declareStart);
 
+        int addPos = command.find(addPrefix);
+        int addStart = addPos + addPrefix.size();
+        int addEnd = command.find(')', addStart);
+
+        int subtractPos = command.find(subtractPrefix);
+        int subtractStart = subtractPos + subtractPrefix.size();
+        int subtractEnd = command.find(')', subtractStart);
 
         if (command == "exit") {
             commandExit();
@@ -368,18 +450,184 @@ public:
                 cout << "DECLARE arg cannot be empty."<< endl;
             }
         }
-        else if(command == "see"){
-            for (const auto& pair : declareValues) {
-                std::cout << pair.first << ": " << pair.second << std::endl;
-            }
+        
+        else if (addPos != string::npos && addEnd != string::npos) {
+        string addValues = extractCommandValue(command, "ADD");
+        if(addValues != ""){
+        
+        vector<string> args;
+        size_t start = 0;
+        size_t end = addValues.find(',');
+        
+        
+        while (end != string::npos && args.size() < 2) {
+            string arg = addValues.substr(start, end - start);
+            arg.erase(0, arg.find_first_not_of(" \t\n\r\f\v"));
+            arg.erase(arg.find_last_not_of(" \t\n\r\f\v") + 1);
+            args.push_back(arg);
+            start = end + 1;
+            end = addValues.find(',', start);
         }
-        else {
-            cout << "Executing command in screen '" << currentScreen->getName() << "': " << command << endl;
+        
+       
+        if (start < addValues.length()) {
+            string lastArg = addValues.substr(start);
+            lastArg.erase(0, lastArg.find_first_not_of(" \t\n\r\f\v"));
+            lastArg.erase(lastArg.find_last_not_of(" \t\n\r\f\v") + 1);
+            args.push_back(lastArg);
+        }
+
+        if (args.size() == 3) {
+            string targetVar = args[0];
+            string source1 = args[1];
+            string source2 = args[2];
+            
+    
+            currentScreen->ensureVariableExists(targetVar);
+            
+            
+            uint16_t val1;
+            if (all_of(source1.begin(), source1.end(), ::isdigit)) {
+                int num = stoi(source1);
+                val1 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+            } else {
+                currentScreen->ensureVariableExists(source1);
+                val1 = currentScreen->getVariable(source1);
+            }
+
+            uint16_t val2;
+            if (all_of(source2.begin(), source2.end(), ::isdigit)) {
+                int num = stoi(source2);
+                val2 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+            } else {
+                currentScreen->ensureVariableExists(source2);
+                val2 = currentScreen->getVariable(source2);
+            }
+            
+            
+            uint32_t result = static_cast<uint32_t>(val1) + static_cast<uint32_t>(val2);
+            uint16_t finalValue = (result > 65535) ? 65535 : static_cast<uint16_t>(result);
+            
+            uint16_t oldValue = currentScreen->getVariable(targetVar);
+            currentScreen->setVariable(targetVar, finalValue);
+            
+            
+            cout << "debug: " << targetVar << " = " << val1 << " + " << val2 
+                 << " = " << finalValue;
+            if (oldValue != finalValue) {
+                cout << " (" << oldValue << " =" << finalValue << ")";
+            }
+            cout << endl;
+            
+            if (result > 65535) {
+                cout << "Note: Result capped at 65535 due to uint16_t overflow." << endl;
+            }
+            
             currentScreen->simulateProgress();
             cout << "Command completed. Progress updated." << endl;
             currentScreen->display();
         }
+        else {
+            cout << "Wrong args for ADD. Must be ADD(target, source1, source2)." << endl;
+        }
     }
+    else {
+        cout << "ADD arg cannot be empty." << endl;
+    }
+}
+
+else if (subtractPos != string::npos && subtractEnd != string::npos) {
+    string subtractValues = extractCommandValue(command, "SUBTRACT");
+    if(subtractValues != ""){
+        vector<string> args;
+        size_t start = 0;
+        size_t end = subtractValues.find(',');
+        
+        
+        while (end != string::npos && args.size() < 2) {
+            string arg = subtractValues.substr(start, end - start);
+            arg.erase(0, arg.find_first_not_of(" \t\n\r\f\v"));
+            arg.erase(arg.find_last_not_of(" \t\n\r\f\v") + 1);
+            args.push_back(arg);
+            start = end + 1;
+            end = subtractValues.find(',', start);
+        }
+        
+        if (start < subtractValues.length()) {
+            string lastArg = subtractValues.substr(start);
+            lastArg.erase(0, lastArg.find_first_not_of(" \t\n\r\f\v"));
+            lastArg.erase(lastArg.find_last_not_of(" \t\n\r\f\v") + 1);
+            args.push_back(lastArg);
+        }
+
+        if (args.size() == 3) {
+            string targetVar = args[0];
+            string source1 = args[1];
+            string source2 = args[2];
+            
+            
+            currentScreen->ensureVariableExists(targetVar);
+            
+            
+            uint16_t val1;
+            if (all_of(source1.begin(), source1.end(), ::isdigit)) {
+                int num = stoi(source1);
+                val1 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+            } else {
+                currentScreen->ensureVariableExists(source1);
+                val1 = currentScreen->getVariable(source1);
+            }
+
+    
+            uint16_t val2;
+            if (all_of(source2.begin(), source2.end(), ::isdigit)) {
+                int num = stoi(source2);
+                val2 = (num < 0) ? 0 : (num > 65535) ? 65535 : static_cast<uint16_t>(num);
+            } else {
+                currentScreen->ensureVariableExists(source2);
+                val2 = currentScreen->getVariable(source2);
+            }
+            
+            
+            uint16_t finalValue;
+            if (val1 >= val2) {
+                finalValue = val1 - val2;
+            } else {
+                finalValue = 0;  
+            }
+            
+            uint16_t oldValue = currentScreen->getVariable(targetVar);
+            currentScreen->setVariable(targetVar, finalValue);
+           
+            cout << "debug: " << targetVar << " = " << val1 << " - " << val2 
+                 << " = " << finalValue << endl;
+            
+            if (val1 < val2) {
+                cout << "Note: Result capped at 0 due to uint16_t underflow prevention." << endl;
+            }
+            
+           
+            currentScreen->simulateProgress();
+            cout << "Command completed. Progress updated." << endl;
+            currentScreen->display();
+        }
+        else {
+            cout << "Wrong args for SUBTRACT. Must be SUBTRACT(target, source1, source2)." << endl;
+        }
+    }
+    else {
+        cout << "SUBTRACT arg cannot be empty." << endl;
+    }
+}
+
+
+    else {
+        cout << "Executing command in screen '" << currentScreen->getName() << "': " << command << endl;
+        currentScreen->simulateProgress();
+        cout << "Command completed. Progress updated." << endl;
+        currentScreen->display();
+    }
+}
 
     void processCommand(const string& command) {
         if (inMainMenu) {
