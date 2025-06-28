@@ -8,7 +8,7 @@
 #include <iostream>
 
 Scheduler::Scheduler(ProcessManager* pm) : running(false), activeProcesses(0), processManager(pm),
-    schedulerType(SchedulerType::FCFS), quantumCycles(5), numCores(4) {}
+    schedulerType(SchedulerType::FCFS), quantumCycles(5), numCores(1) {}
 
 Scheduler::~Scheduler() {
     stop();
@@ -294,7 +294,15 @@ uint16_t Scheduler::getValueFromArgument(std::shared_ptr<Process> process, const
 void Scheduler::setSchedulerConfig(const std::string& algorithm, int quantum, int cores) {
     schedulerType = parseSchedulerType(algorithm);
     quantumCycles = quantum;
-    numCores = cores;
+    
+    // If numCores is changing and scheduler is running, restart with new core count
+    if (numCores != cores && running) {
+        stop();
+        numCores = cores;
+        start();
+    } else {
+        numCores = cores;
+    }
 }
 
 SchedulerType Scheduler::parseSchedulerType(const std::string& algorithm) {

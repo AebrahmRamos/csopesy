@@ -13,7 +13,7 @@ ConsoleManager::ConsoleManager() : currentScreen(nullptr), inMainMenu(true), ini
     processManager = std::make_unique<ProcessManager>();
     reportGenerator = std::make_unique<ReportGenerator>();
     processManager->initialize();
-    processManager->startScheduler();
+    // Don't start scheduler here - wait until configuration is loaded
 }
 
 ConsoleManager::~ConsoleManager() {
@@ -267,6 +267,9 @@ void ConsoleManager::commandInitialize() {
         // Pass config to ProcessManager
         processManager->setConfig(config);
         
+        // Start scheduler with the correct configuration
+        processManager->startScheduler();
+        
         initialized = true;
     } else {
         printConfigError(config.errorMessage);
@@ -294,6 +297,7 @@ void ConsoleManager::commandSchedulerTest() {
 void ConsoleManager::commandSchedulerStop() {
     if (processManager) {
         processManager->stopProcessGeneration();
+        processManager->stopScheduler();
     }
 }
 
