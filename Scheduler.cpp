@@ -52,26 +52,30 @@ bool Scheduler::isRunning() const {
 void Scheduler::cpuWorker(int coreId) {
     while (running) {
         std::shared_ptr<Process> process = nullptr;
-        
         {
+            // Wait for a process to be available or for the scheduler to stop
             std::unique_lock<std::mutex> lock(queueMutex);
-            cv.wait(lock, [this]() { return !running || !readyQueue.empty(); });
+            cv.wait(lock, [this]() { return !readyQueue.empty() || !running; });
             
+            // Exit if the scheduler is stopped and no processes are left
             if (!running && readyQueue.empty()) {
                 return;
             }
             
+            // Get the next process from the ready queue
             if (!readyQueue.empty()) {
                 process = readyQueue.front();
                 readyQueue.pop();
             }
         }
         
+        // Execute the process
         if (process) {
             executeProcess(process, coreId);
         }
     }
 }
+
 
 void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
     if (processManager) {
@@ -103,23 +107,24 @@ void Scheduler::executeProcessFCFS(std::shared_ptr<Process> process, int coreId)
             // Advance to next instruction
             process->advanceInstruction();
             
-            // Simulate CPU work delay
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            // Simulate CPU work delay (adjusting it based on your system's requirements)
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
         }
-    } else {
-        // Legacy behavior for manually created processes
-        while (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive()) {
-            process->incrementLine();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
+    }
+
+    // If the process has finished all instructions, mark it as finished
+    if (!process->getIsActive()) {
+        activeProcesses--;  // Reduce the active process count
+        std::cout << "Process " << process->getName() << " has finished executing." << std::endl;
     }
 }
 
+
 void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
-    // Round Robin: Execute for quantum cycles, then preempt if needed
+    int cyclesUsed = 0;
+
+    // Check if the process is in auto-execution mode
     if (process->isAutoExecuting()) {
-        int cyclesUsed = 0;
-        
         while (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed < quantumCycles) {
             std::string currentInstruction = process->getCurrentInstruction();
             
@@ -132,33 +137,36 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
             // Advance to next instruction
             process->advanceInstruction();
             
-            // Increment cycles used
             cyclesUsed++;
-            
-            // Simulate CPU work delay
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+            // Simulate CPU work delay (adjusted delay)
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
         }
-        
-        // If process still has more instructions and quantum expired, requeue it
+
+        // Requeue if the process still has instructions left
         if (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed >= quantumCycles && running) {
             requeueProcess(process);
-            activeProcesses++;
+            activeProcesses++;  // Increment active processes when the process is requeued
         }
     } else {
-        int cyclesUsed = 0;
-        while (process->getCurrentLine() <= process->getTotalLines() && 
-               process->getIsActive() && 
-               cyclesUsed < quantumCycles) {
+        // Manual execution (legacy handling)
+        while (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive() && cyclesUsed < quantumCycles) {
             process->incrementLine();
             cyclesUsed++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
         }
-        
-        // Requeue if not finished
+
+        // Requeue if not finished and still active
         if (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive() && running) {
             requeueProcess(process);
             activeProcesses++;
         }
+    }
+
+    // If the process has finished all instructions, mark it as finished
+    if (!process->getIsActive()) {
+        activeProcesses--;
+        std::cout << "Process " << process->getName() << " has finished executing." << std::endl;
     }
 }
 
@@ -318,8 +326,12 @@ SchedulerType Scheduler::parseSchedulerType(const std::string& algorithm) {
 
 void Scheduler::requeueProcess(std::shared_ptr<Process> process) {
     {
+        // Ensure thread safety when accessing the queue
         std::lock_guard<std::mutex> lock(queueMutex);
-        readyQueue.push(process);
+        
+        if (process->getIsActive()) {  // Only requeue active processes
+            readyQueue.push(process);
+        }
     }
-    cv.notify_one();
+    cv.notify_one();  // Notify worker thread to pick up a process
 }
