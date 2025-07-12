@@ -303,7 +303,6 @@ void ConsoleManager::commandSchedulerTest() {
 void ConsoleManager::commandSchedulerStop() {
     if (processManager) {
         processManager->stopProcessGeneration();
-        // processManager->stopScheduler();
     }
 }
 
