@@ -89,22 +89,17 @@ void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
 }
 
 void Scheduler::executeProcessFCFS(std::shared_ptr<Process> process, int coreId) {
-    // FCFS: Execute process to completion
     if (process->isAutoExecuting()) {
         while (process->hasMoreInstructions() && process->getIsActive()) {
             std::string currentInstruction = process->getCurrentInstruction();
             
-            // Execute the instruction
             executeInstruction(process, currentInstruction);
             
-            // Add to execution log
             process->addToExecutionLog(currentInstruction);
             
-            // Advance to next instruction
             process->advanceInstruction();
             
-            // Simulate CPU work delay (adjusting it based on your system's requirements)
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
 
@@ -165,6 +160,7 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
         std::cout << "Process " << process->getName() << " has finished executing." << std::endl;
     }
 }
+
 
 void Scheduler::executeInstruction(std::shared_ptr<Process> process, const std::string& instruction) {
     // Parse and execute the instruction
