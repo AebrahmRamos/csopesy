@@ -44,7 +44,6 @@ public:
     void stop();
     void addProcess(std::shared_ptr<Process> process);
     bool isProcessing() const;
-    bool isRunning() const;  // Check if scheduler is running
     
     // Configuration methods
     void setSchedulerConfig(const std::string& algorithm, int quantum, int cores);

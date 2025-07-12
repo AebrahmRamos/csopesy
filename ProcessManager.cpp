@@ -165,9 +165,6 @@ int ProcessManager::getNumCores() const {
 }
 
 int ProcessManager::getUsedCores() const {
-    // If scheduler is not running, no cores are being used
-    if (!isSchedulerRunning()) return 0;
-    
     std::lock_guard<std::mutex> lock(processMutex);
     std::set<int> usedCores;
     for (const auto& process : processes) {
@@ -183,13 +180,7 @@ int ProcessManager::getUsedCores() const {
 
 double ProcessManager::getCpuUtilization() const {
     if (numCores == 0) return 0.0;
-    // If scheduler is not running, CPU utilization should be 0
-    if (!isSchedulerRunning()) return 0.0;
     return (static_cast<double>(getUsedCores()) / numCores) * 100.0;
-}
-
-bool ProcessManager::isSchedulerRunning() const {
-    return scheduler ? scheduler->isRunning() : false;
 }
 
 void ProcessManager::updateProcessCore(int processId, int coreId) {

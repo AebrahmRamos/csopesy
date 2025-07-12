@@ -45,10 +45,6 @@ bool Scheduler::isProcessing() const {
     return activeProcesses > 0;
 }
 
-bool Scheduler::isRunning() const {
-    return running;
-}
-
 void Scheduler::cpuWorker(int coreId) {
     while (running) {
         std::shared_ptr<Process> process = nullptr;
