@@ -98,8 +98,6 @@ void Scheduler::executeProcessFCFS(std::shared_ptr<Process> process, int coreId)
             process->addToExecutionLog(currentInstruction);
             
             process->advanceInstruction();
-            
-            // std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
 
@@ -130,8 +128,6 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
             
             cyclesUsed++;
 
-            // Simulate CPU work delay (adjusted delay)
-            // std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
         }
 
         // Requeue if the process still has instructions left
@@ -144,7 +140,6 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
         while (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive() && cyclesUsed < quantumCycles) {
             process->incrementLine();
             cyclesUsed++;
-            // std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
         }
 
         // Requeue if not finished and still active
@@ -211,8 +206,7 @@ void Scheduler::executeInstruction(std::shared_ptr<Process> process, const std::
             try {
                 int ticks = std::stoi(ticksStr);
                 if (ticks > 0) {
-                    // Sleep for ticks * 100ms (simulating CPU ticks)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 100));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(ticks * 50));
                 }
             } catch (...) {
                 // Invalid ticks, ignore
