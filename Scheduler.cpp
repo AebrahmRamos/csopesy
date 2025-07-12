@@ -225,8 +225,6 @@ void Scheduler::executeInstruction(std::shared_ptr<Process> process, const std::
         }
     }
     else if (instruction.find("FOR(") == 0) {
-        // FOR loops are more complex and should be handled recursively
-        // For now, just log the instruction
         // TODO: Implement nested instruction execution
     }
 }
