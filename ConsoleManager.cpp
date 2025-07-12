@@ -138,12 +138,6 @@ bool ConsoleManager::loadConfig(const std::string& filename) {
             config.maxIns = std::stoi(value);
         } else if (key == "delays-per-exec") {
             config.delaysPerExec = std::stoi(value);
-        } else if (key == "max-overall-mem") {
-            config.maxOverallMem = std::stoi(value);  // New parameter
-        } else if (key == "mem-per-frame") {
-            config.memPerFrame = std::stoi(value);   // New parameter
-        } else if (key == "mem-per-proc") {
-            config.memPerProc = std::stoi(value);    // New parameter
         }
     }
     
