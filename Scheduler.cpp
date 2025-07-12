@@ -157,7 +157,6 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
     // If the process has finished all instructions, mark it as finished
     if (!process->getIsActive()) {
         activeProcesses--;
-        std::cout << "Process " << process->getName() << " has finished executing." << std::endl;
     }
 }
 
