@@ -7,6 +7,7 @@
 Process::Process(const std::string& name, int id, int totalCommands) 
     : processName(name), processId(id), currentLine(1), totalLines(totalCommands), 
       isActive(true), assignedCore(-1), startTime(std::chrono::steady_clock::now()),
+      hasMemoryAllocated(false), memorySize(0), memoryStartAddress(-1), memoryEndAddress(-1),
       currentInstructionIndex(0), isExecutingAutomatically(false) {
     
     time_t t = time(nullptr);
@@ -137,4 +138,34 @@ int Process::getCurrentInstructionIndex() const {
 
 std::vector<std::string> Process::getExecutionLog() const {
     return executionLog;
+}
+
+// Memory management getters and setters
+bool Process::getHasMemoryAllocated() const { 
+    return hasMemoryAllocated; 
+}
+
+void Process::setHasMemoryAllocated(bool allocated) { 
+    hasMemoryAllocated = allocated; 
+}
+
+int Process::getMemorySize() const { 
+    return memorySize; 
+}
+
+void Process::setMemorySize(int size) { 
+    memorySize = size; 
+}
+
+void Process::setMemoryAddress(int start, int end) {
+    memoryStartAddress = start;
+    memoryEndAddress = end;
+}
+
+int Process::getMemoryStartAddress() const { 
+    return memoryStartAddress; 
+}
+
+int Process::getMemoryEndAddress() const { 
+    return memoryEndAddress; 
 }

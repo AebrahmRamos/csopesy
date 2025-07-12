@@ -8,6 +8,7 @@
 #include <string>
 #include "Process.h"
 #include "Scheduler.h"
+#include "MemoryManager.h"
 
 class ProcessGenerator;
 struct Config; // Forward declaration
@@ -17,10 +18,12 @@ private:
     std::vector<std::shared_ptr<Process>> processes;
     std::unique_ptr<Scheduler> scheduler;
     std::unique_ptr<ProcessGenerator> generator;
+    std::unique_ptr<MemoryManager> memoryManager;
     std::map<int, int> processCoreMap;          // maps processId:coreId pairs
     mutable std::mutex processMutex;            // For thread-safe process operations
     int numCores;
     Config* storedConfigPtr; // Store pointer to config
+    int currentQuantumCycle; // Current quantum cycle counter
 
 public:
     ProcessManager();
@@ -37,6 +40,13 @@ public:
     void stopProcessGeneration();
     bool isGeneratingProcesses() const;
     void addGeneratedProcess(std::shared_ptr<Process> process);
+    
+    // Memory management
+    bool allocateMemoryToProcess(std::shared_ptr<Process> process);
+    void releaseProcessMemory(std::shared_ptr<Process> process);
+    void generateMemorySnapshot();
+    void incrementQuantumCycle();
+    int getCurrentQuantumCycle() const;
     
     // Process accessing like screen and report util
     std::vector<std::shared_ptr<Process>> getRunningProcesses() const;

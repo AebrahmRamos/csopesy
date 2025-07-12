@@ -33,16 +33,26 @@ void Scheduler::stop() {
 }
 
 void Scheduler::addProcess(std::shared_ptr<Process> process) {
+    if (!process) {
+        std::cerr << "Attempted to add null process to scheduler" << std::endl;
+        return;
+    }
+    
     {
         std::lock_guard<std::mutex> lock(queueMutex);
         readyQueue.push(process);
         activeProcesses++;
+        // Removed verbose process addition logging
     }
     cv.notify_one();
 }
 
 bool Scheduler::isProcessing() const {
     return activeProcesses > 0;
+}
+
+bool Scheduler::isRunning() const {
+    return running;
 }
 
 void Scheduler::cpuWorker(int coreId) {
@@ -52,8 +62,7 @@ void Scheduler::cpuWorker(int coreId) {
             // Wait for a process to be available or for the scheduler to stop
             std::unique_lock<std::mutex> lock(queueMutex);
             cv.wait(lock, [this]() { return !readyQueue.empty() || !running; });
-            
-            // Exit if the scheduler is stopped and no processes are left
+
             if (!running && readyQueue.empty()) {
                 return;
             }
@@ -74,15 +83,25 @@ void Scheduler::cpuWorker(int coreId) {
 
 
 void Scheduler::executeProcess(std::shared_ptr<Process> process, int coreId) {
-    if (processManager) {
-        processManager->updateProcessCore(process->getProcessId(), coreId);
+    if (!process) {
+        std::cerr << "Error: Null process passed to executeProcess for core " << coreId << std::endl;
+        return;
     }
     
-    // choose scheduling algorithm
-    if (schedulerType == SchedulerType::RR) {
-        executeProcessRR(process, coreId);
-    } else {
-        executeProcessFCFS(process, coreId);
+    try {
+        if (processManager) {
+            processManager->updateProcessCore(process->getProcessId(), coreId);
+        }
+        
+        // Removed scheduler logging
+                
+        if (schedulerType == SchedulerType::RR) {
+            executeProcessRR(process, coreId);
+        } else {
+            executeProcessFCFS(process, coreId);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in executeProcess: " << e.what() << std::endl;
     }
     
     activeProcesses--;
@@ -106,57 +125,97 @@ void Scheduler::executeProcessFCFS(std::shared_ptr<Process> process, int coreId)
     // If the process has finished all instructions, mark it as finished
     if (!process->getIsActive()) {
         activeProcesses--;  // Reduce the active process count
-        std::cout << "Process " << process->getName() << " has finished executing." << std::endl;
+        // Process has finished executing
     }
 }
 
 
 void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
-    int cyclesUsed = 0;
-
-    // Check if the process is in auto-execution mode
+    // Removed verbose process execution logging
+    
     if (process->isAutoExecuting()) {
-        while (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed < quantumCycles) {
+        int cyclesExecuted = 0;
+        
+        // Execute up to the quantum limit
+        while (process->hasMoreInstructions() && process->getIsActive() && cyclesExecuted < quantumCycles) {
             std::string currentInstruction = process->getCurrentInstruction();
             
-            // Execute the instruction
+            // Removed instruction execution log
             executeInstruction(process, currentInstruction);
             
-            // Add to execution log
             process->addToExecutionLog(currentInstruction);
-            
-            // Advance to next instruction
             process->advanceInstruction();
             
-            cyclesUsed++;
-
-            // Simulate CPU work delay (adjusted delay)
-            // std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
+            cyclesExecuted++;
         }
-
-        // Requeue if the process still has instructions left
-        if (process->hasMoreInstructions() && process->getIsActive() && cyclesUsed >= quantumCycles && running) {
-            requeueProcess(process);
-            activeProcesses++;  // Increment active processes when the process is requeued
+        
+        // Removed instruction execution summary log
+        
+        // If the process is finished, release its memory
+        if (!process->hasMoreInstructions() || !process->getIsActive()) {
+            // Process is finished, release memory
+            if (processManager) {
+                processManager->releaseProcessMemory(process);
+            }
+            process->setAssignedCore(-1);
+            
+            // Generate memory snapshot at the end of quantum cycle
+            if (processManager) {
+                // Increment quantum cycle
+                processManager->incrementQuantumCycle();
+            }
+            
+            activeProcesses--; // Decrement active process count
+            // Process completed
+            return; // Process is complete
+        }
+        
+        // Generate memory snapshot at the end of quantum cycle
+        if (processManager) {
+            // Increment quantum cycle
+            processManager->incrementQuantumCycle();
+        }
+        
+        // If the process has more instructions, add it back to the ready queue
+        if (process->hasMoreInstructions() && process->getIsActive()) {
+            // Process has more work, adding back to ready queue
+            std::lock_guard<std::mutex> lock(queueMutex);
+            process->setAssignedCore(-1);
+            readyQueue.push(process);
         }
     } else {
-        // Manual execution (legacy handling)
-        while (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive() && cyclesUsed < quantumCycles) {
-            process->incrementLine();
-            cyclesUsed++;
-            // std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Reduced delay for better performance
+        // Manual execution mode
+        if (process->hasMoreInstructions() && process->getIsActive()) {
+            std::string currentInstruction = process->getCurrentInstruction();
+            
+            executeInstruction(process, currentInstruction);
+            
+            process->addToExecutionLog(currentInstruction);
+            process->advanceInstruction();
+            
+            // If the process is finished, release its memory
+            if (!process->hasMoreInstructions() || !process->getIsActive()) {
+                if (processManager) {
+                    processManager->releaseProcessMemory(process);
+                }
+                process->setAssignedCore(-1);
+                
+                // Generate memory snapshot at the end of quantum cycle
+                if (processManager) {
+                    processManager->incrementQuantumCycle();
+                }
+            } else {
+                // If the process has more instructions, add it back to the ready queue
+                std::lock_guard<std::mutex> lock(queueMutex);
+                process->setAssignedCore(-1);
+                readyQueue.push(process);
+                
+                // Generate memory snapshot at the end of quantum cycle
+                if (processManager) {
+                    processManager->incrementQuantumCycle();
+                }
+            }
         }
-
-        // Requeue if not finished and still active
-        if (process->getCurrentLine() <= process->getTotalLines() && process->getIsActive() && running) {
-            requeueProcess(process);
-            activeProcesses++;
-        }
-    }
-
-    // If the process has finished all instructions, mark it as finished
-    if (!process->getIsActive()) {
-        activeProcesses--;
     }
 }
 

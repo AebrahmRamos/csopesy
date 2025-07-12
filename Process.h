@@ -17,6 +17,12 @@ private:
     int assignedCore;
     std::chrono::steady_clock::time_point startTime;
     
+    // Memory management attributes
+    bool hasMemoryAllocated;
+    int memorySize;
+    int memoryStartAddress;
+    int memoryEndAddress;
+    
     // Instruction execution support
     std::vector<std::string> instructions;
     int currentInstructionIndex;
@@ -35,6 +41,15 @@ public:
     bool getIsActive() const;
     int getProcessId() const;
     int getAssignedCore() const;
+    
+    // Memory management getters and setters
+    bool getHasMemoryAllocated() const;
+    void setHasMemoryAllocated(bool allocated);
+    int getMemorySize() const;
+    void setMemorySize(int size);
+    void setMemoryAddress(int start, int end);
+    int getMemoryStartAddress() const;
+    int getMemoryEndAddress() const;
     
     // Setters
     void setActive(bool active);

@@ -39,13 +39,17 @@ struct ProcessInfo {
 };
 
 struct Config {
-    int numCpu = 4;
-    std::string scheduler = "fcfs";
-    int quantumCycles = 5;
+    int numCpu = 2;
+    std::string scheduler = "rr";
+    int quantumCycles = 4;
     int batchProcessFreq = 1;
-    int minIns = 1000;
-    int maxIns = 2000;
+    int minIns = 100;
+    int maxIns = 100;
     int delaysPerExec = 0;
+    int maxOverallMem = 16384;
+    int memPerFrame = 16;
+    int memPerProc = 4096;
+    std::string holeFitPolicy = "F"; // F for First-fit
     
     bool isValid = false;
     std::string errorMessage = "";
@@ -58,14 +62,23 @@ private:
     std::map<std::string, uint16_t> declaredVariables;
     bool inMainMenu;
     bool initialized;
-    Config config;
+    
+    // Process Manager and handling
     std::unique_ptr<ProcessManager> processManager;
     std::unique_ptr<ReportGenerator> reportGenerator;
+    
+    // Configuration
+    Config config;
+    bool loadConfig(const std::string& filename);
+    bool loadConfig(Config& cfg);
+    bool validateConfig();
+    Config* getOSConfig() { return &config; }
+
+    // Private helper methods
+    
     std::string extractName(const std::string& command);
     bool findCommand(const std::string& text, const std::string& command);
     std::string extractPrintMsg(const std::string& command);
-    bool loadConfig(const std::string& filename);               // Loads the configuration from a file
-    bool validateConfig();                                      // Checks for config errors
     void printConfigError(const std::string& error);            // Prints out the error
     void printGPUInfo(const GPUInfo& gpu);
     void printProcessInfo(const ProcessInfo& process);
@@ -89,6 +102,8 @@ public:
     void commandSchedulerStart();
     void commandSchedulerTest();
     void commandSchedulerStop();
+    void commandSchedulerHelp();
+    void commandStatus();
     void commandReportUtil();
     void commandNvidiaSmi();
     void commandClear();

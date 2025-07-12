@@ -138,6 +138,14 @@ bool ConsoleManager::loadConfig(const std::string& filename) {
             config.maxIns = std::stoi(value);
         } else if (key == "delays-per-exec") {
             config.delaysPerExec = std::stoi(value);
+        } else if (key == "max-overall-mem") {
+            config.maxOverallMem = std::stoi(value);
+        } else if (key == "mem-per-frame") {
+            config.memPerFrame = std::stoi(value);
+        } else if (key == "mem-per-proc") {
+            config.memPerProc = std::stoi(value);
+        } else if (key == "hole-fit-policy") {
+            config.holeFitPolicy = value;
         }
     }
     
@@ -194,15 +202,39 @@ bool ConsoleManager::validateConfig() {
         return false;
     }
     
-    // Validate delays-per-exec [0, ∞]
-    if (config.delaysPerExec < 0) {
-        config.errorMessage = "delays-per-exec must be >= 0. Got: " + std::to_string(config.delaysPerExec);
+    // Validate memory parameters
+    if (config.maxOverallMem < 1) {
+        config.errorMessage = "max-overall-mem must be >= 1. Got: " + std::to_string(config.maxOverallMem);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.memPerFrame < 1) {
+        config.errorMessage = "mem-per-frame must be >= 1. Got: " + std::to_string(config.memPerFrame);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.memPerProc < 1) {
+        config.errorMessage = "mem-per-proc must be >= 1. Got: " + std::to_string(config.memPerProc);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.memPerProc > config.maxOverallMem) {
+        config.errorMessage = "mem-per-proc cannot be larger than max-overall-mem. Got mem-per-proc: " + 
+                              std::to_string(config.memPerProc) + ", max-overall-mem: " + std::to_string(config.maxOverallMem);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.holeFitPolicy != "F") {
+        config.errorMessage = "hole-fit-policy must be 'F' for First-fit. Got: " + config.holeFitPolicy;
         config.isValid = false;
         return false;
     }
     
     config.isValid = true;
-    config.errorMessage = "";
     return true;
 }
 
@@ -251,40 +283,55 @@ void ConsoleManager::commandHelp() {
 }
 
 void ConsoleManager::commandInitialize() {
-    std::cout << "Reading config.txt..." << std::endl;      // Loading message
+    Config config;
     
-    if (loadConfig("config.txt")) {
-        std::cout << "\033[32m[CONFIG SUCCESS]\033[0m Configuration loaded successfully!" << std::endl;
-        std::cout << "  CPU Cores: " << config.numCpu << std::endl;
-        std::cout << "  Scheduler: " << config.scheduler << std::endl;
-        std::cout << "  Quantum Cycles: " << config.quantumCycles << std::endl;
-        std::cout << "  Batch Process Frequency: " << config.batchProcessFreq << std::endl;
-        std::cout << "  Min Instructions: " << config.minIns << std::endl;
-        std::cout << "  Max Instructions: " << config.maxIns << std::endl;
-        std::cout << "  Delays per Execution: " << config.delaysPerExec << std::endl;
-        std::cout << "System initialized successfully." << std::endl;
+    if (loadConfig(config)) {
+        std::cout << "OS initialized with configuration:\n";
+        std::cout << "  num-cpu: " << config.numCpu << "\n";
+        std::cout << "  scheduler: " << config.scheduler << "\n";
+        std::cout << "  quantum-cycles: " << config.quantumCycles << "\n";
+        std::cout << "  batch-process-freq: " << config.batchProcessFreq << "\n";
+        std::cout << "  min-ins: " << config.minIns << "\n";
+        std::cout << "  max-ins: " << config.maxIns << "\n";
+        std::cout << "  max-overall-mem: " << config.maxOverallMem << "\n";
+        std::cout << "  mem-per-frame: " << config.memPerFrame << "\n";
+        std::cout << "  mem-per-proc: " << config.memPerProc << "\n";
+        std::cout << "  hole-fit-policy: " << config.holeFitPolicy << "\n";
         
-        // Pass config to ProcessManager
-        processManager->setConfig(config);
-        
-        // Start scheduler with the correct configuration
-        processManager->startScheduler();
+        if (processManager) {
+            processManager->setConfig(config);
+        }
         
         initialized = true;
     } else {
-        printConfigError(config.errorMessage);
-        std::cout << "System initialization failed. Please fix config.txt and try again." << std::endl;
-        initialized = false;
+        std::cout << "Failed to initialize OS: " << config.errorMessage << "\n";
     }
 }
 
 void ConsoleManager::commandSchedulerStart() {
     if (processManager) {
-        if (!processManager->isGeneratingProcesses()) {
+        try {
+            // First stop any existing processes to ensure a clean start
+            if (processManager->isGeneratingProcesses()) {
+                std::cout << "Stopping existing process generation..." << std::endl;
+                processManager->stopProcessGeneration();
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Give it time to stop
+            }
+            
+            // First start the scheduler itself
+            std::cout << "Starting scheduler..." << std::endl;
+            processManager->startScheduler();
+            
+            // Then start process generation
+            std::cout << "Starting process generation..." << std::endl;
             processManager->startProcessGeneration();
-        } else {
-            std::cout << "Process generation is already running." << std::endl;
+            
+            std::cout << "Scheduler and process generation started." << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Error starting scheduler: " << e.what() << std::endl;
         }
+    } else {
+        std::cerr << "Error: Process manager not initialized." << std::endl;
     }
 }
 
@@ -297,6 +344,8 @@ void ConsoleManager::commandSchedulerTest() {
 void ConsoleManager::commandSchedulerStop() {
     if (processManager) {
         processManager->stopProcessGeneration();
+        // processManager->stopScheduler();
+        // std::cout << "Scheduler and process generation stopped." << std::endl;
     }
 }
 
@@ -470,6 +519,12 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     }
     else if (command == "scheduler-stop" && initialized) {
         commandSchedulerStop();
+    }
+    else if (command == "scheduler-help" && initialized) {
+        commandSchedulerHelp();
+    }
+    else if (command == "status" && initialized) {
+        commandStatus();
     }
     else if (command == "report-util" && initialized) {
         commandReportUtil();
@@ -924,4 +979,63 @@ std::vector<std::string> ConsoleManager::parseCommaSeparatedArgs(const std::stri
     }
 
     return args;
+}
+
+void ConsoleManager::commandSchedulerHelp() {
+    std::cout << "\nScheduler Help:\n";
+    std::cout << "----------------\n";
+    std::cout << "scheduler-start    - Start the scheduler and process generation\n";
+    std::cout << "scheduler-stop     - Stop the scheduler and process generation\n";
+    std::cout << "status             - Display memory allocation and process status\n";
+    std::cout << "exit               - Exit the simulator\n\n";
+}
+
+void ConsoleManager::commandStatus() {
+    if (!processManager) {
+        std::cout << "Process manager not initialized.\n";
+        return;
+    }
+    
+    std::cout << "\nMemory and Process Status:\n";
+    std::cout << "-------------------------\n";
+    
+    // Display memory allocation status
+    if (auto ptr = getOSConfig()) {
+        std::cout << "Memory configuration:\n";
+        std::cout << "  Total memory: " << ptr->maxOverallMem << " bytes\n";
+        std::cout << "  Memory per process: " << ptr->memPerProc << " bytes\n";
+        std::cout << "  Memory per frame: " << ptr->memPerFrame << " bytes\n";
+        std::cout << "  Allocation policy: " << (ptr->holeFitPolicy == "F" ? "First-fit" : ptr->holeFitPolicy) << "\n\n";
+    }
+    
+    // Display process status
+    processManager->showProcessStatus();
+    
+    std::cout << "\nTo see detailed memory allocation, check memory_stamp_XX.txt files.\n";
+}
+
+bool ConsoleManager::loadConfig(Config& cfg) {
+    // Default values for memory management as per requirements
+    cfg.numCpu = 2;
+    cfg.scheduler = "rr";
+    cfg.quantumCycles = 4;
+    cfg.batchProcessFreq = 1;
+    cfg.minIns = 100;
+    cfg.maxIns = 100;
+    
+    // Memory management parameters
+    cfg.maxOverallMem = 16384;
+    cfg.memPerFrame = 16;
+    cfg.memPerProc = 4096;
+    cfg.holeFitPolicy = "F"; // F for First-fit
+    
+    // Try loading from config file, but use defaults if not found or invalid
+    bool fileLoaded = loadConfig("config.txt");
+    if (fileLoaded) {
+        cfg = config;
+    } else {
+        cfg.isValid = true;
+    }
+    
+    return cfg.isValid;
 }
