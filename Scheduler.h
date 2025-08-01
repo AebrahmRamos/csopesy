@@ -22,12 +22,13 @@ enum class SchedulerType {
 
 class Scheduler {
 private:
-    static constexpr int NUM_CORES = 4;
+    // NUM_CORES removed - use dynamic numCores from config
     std::queue<std::shared_ptr<Process>> readyQueue;
     std::vector<std::thread> cpuThreads;
     std::mutex queueMutex;
     std::condition_variable cv;
     std::atomic<bool> running;
+    std::atomic<bool> generationStopped; // For graceful shutdown - stop generation but allow execution
     std::atomic<int> activeProcesses;
     ProcessManager* processManager;
     
@@ -42,6 +43,7 @@ public:
     
     void start();
     void stop();
+    void stopGracefully(); // Allow current processes to finish
     void addProcess(std::shared_ptr<Process> process);
     bool isProcessing() const;
     bool isRunning() const;
@@ -56,7 +58,10 @@ private:
     void executeProcessRR(std::shared_ptr<Process> process, int coreId);
     void executeInstruction(std::shared_ptr<Process> process, const std::string& instruction);
     void executeArithmeticInstruction(std::shared_ptr<Process> process, const std::string& instruction, const std::string& operation);
+    void executeMemoryInstruction(std::shared_ptr<Process> process, const std::string& instruction, const std::string& operation);
     uint16_t getValueFromArgument(std::shared_ptr<Process> process, const std::string& arg);
+    uint32_t parseHexAddress(const std::string& addressStr);
+    std::vector<std::string> parseInstructionArgs(const std::string& instruction);
     
     // Helper methods
     SchedulerType parseSchedulerType(const std::string& algorithm);
