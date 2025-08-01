@@ -127,6 +127,7 @@ bool ConsoleManager::loadConfig(const std::string& filename) {
         if (key == "num-cpu") {
             config.numCpu = std::stoi(value);
         } else if (key == "scheduler") {
+            value.erase(std::remove(value.begin(), value.end(), '"'), value.end());
             config.scheduler = value;
         } else if (key == "quantum-cycles") {
             config.quantumCycles = std::stoi(value);

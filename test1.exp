@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+set timeout 15
+
+spawn ./csopesy
+
+expect "Enter a command:"
+send "initialize\r"
+
+expect "Enter a command:"
+send "screen -s proc1 512\r"
+
+expect "] Enter command (or 'exit' to return):"
+send "exit\r"
+
+expect "Enter a command:"
+send "screen -s proc2 512\r"
+
+expect "] Enter command (or 'exit' to return):"
+send "exit\r"
+
+sleep 5
+
+expect "Enter a command:"
+send "screen -ls\r"
+
+expect "Enter a command:"
+send "process-smi\r"
+
+expect "Enter a command:"
+send "exit\r"
+
+expect eof

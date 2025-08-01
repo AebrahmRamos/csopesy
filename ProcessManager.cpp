@@ -349,11 +349,6 @@ bool ProcessManager::allocateMemoryToProcess(std::shared_ptr<Process> process) {
         return false;
     }
     
-    if (!memoryManager) {
-        std::cerr << "Failed to allocate memory: MemoryManager is null" << std::endl;
-        return false;
-    }
-    
     // Check if the process already has memory allocated
     if (process->getHasMemoryAllocated()) {
         return true;
@@ -368,53 +363,78 @@ bool ProcessManager::allocateMemoryToProcess(std::shared_ptr<Process> process) {
         memSize = 4096; // Use default if invalid
     }
     
-    // Try to allocate memory using first-fit algorithm
     bool allocated = false;
-    try {
-        allocated = memoryManager->allocateMemory(process);
-    } catch (const std::exception& e) {
-        std::cerr << "Exception during memory allocation: " << e.what() << std::endl;
-        return false;
-    }
     
-    if (allocated) {
-        // Update process state to indicate memory allocation
-        process->setHasMemoryAllocated(true);
-        process->setMemorySize(memSize);
-        
+    if (useVirtualMemory && vmManager) {
+        // Phase 2: Use virtual memory manager
         try {
-            // Get the memory map (start and end addresses) for this process
-            auto [start, end] = memoryManager->getProcessMemoryMap(process->getProcessId());
-            
-            // Verify that we got valid memory addresses
-            if (start >= 0 && end > start) {
-                process->setMemoryAddress(start, end);
-            } else {
-                std::cerr << "Warning: Invalid memory addresses returned for process " 
-                          << process->getName() << ": start=" << start << ", end=" << end << std::endl;
-                // Set some default values to prevent further issues
-                process->setMemoryAddress(0, memSize);
+            allocated = vmManager->allocateVirtualMemory(process->getProcessId(), memSize);
+            if (allocated) {
+                process->setHasMemoryAllocated(true);
+                process->setVirtualMemorySize(memSize);
+                // For virtual memory, the process sees addresses starting from 0
+                process->setMemoryAddress(0, memSize - 1);
             }
         } catch (const std::exception& e) {
-            std::cerr << "Exception while retrieving memory map: " << e.what() << std::endl;
-            // We'll still return true because memory was allocated
+            std::cerr << "Exception during virtual memory allocation: " << e.what() << std::endl;
+            return false;
         }
     } else {
-        // Only log failures when debugging is needed
-        // std::cout << "Failed to allocate memory for process " << process->getName() 
-        //          << " (ID: " << process->getProcessId() << ") - Not enough space" << std::endl;
+        // Phase 1: Use existing memory manager
+        if (!memoryManager) {
+            std::cerr << "Failed to allocate memory: MemoryManager is null" << std::endl;
+            return false;
+        }
+        
+        try {
+            allocated = memoryManager->allocateMemory(process);
+        } catch (const std::exception& e) {
+            std::cerr << "Exception during memory allocation: " << e.what() << std::endl;
+            return false;
+        }
+        
+        if (allocated) {
+            // Update process state to indicate memory allocation
+            process->setHasMemoryAllocated(true);
+            process->setMemorySize(memSize);
+            
+            try {
+                // Get the memory map (start and end addresses) for this process
+                auto [start, end] = memoryManager->getProcessMemoryMap(process->getProcessId());
+                
+                // Verify that we got valid memory addresses
+                if (start >= 0 && end > start) {
+                    process->setMemoryAddress(start, end);
+                } else {
+                    std::cerr << "Warning: Invalid memory addresses returned for process " 
+                              << process->getName() << ": start=" << start << ", end=" << end << std::endl;
+                    // Set some default values to prevent further issues
+                    process->setMemoryAddress(0, memSize);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Exception while retrieving memory map: " << e.what() << std::endl;
+                // We'll still return true because memory was allocated
+            }
+        }
     }
     
     return allocated;
 }
 
 void ProcessManager::releaseProcessMemory(std::shared_ptr<Process> process) {
-    if (!process || !memoryManager) {
+    if (!process) {
         return;
     }
     
-    // Release memory allocated to this process
-    memoryManager->deallocateMemory(process->getProcessId());
+    if (useVirtualMemory && vmManager) {
+        // Phase 2: Release virtual memory
+        vmManager->deallocateVirtualMemory(process->getProcessId());
+    } else {
+        // Phase 1: Release physical memory
+        if (memoryManager) {
+            memoryManager->deallocateMemory(process->getProcessId());
+        }
+    }
     
     // Update process state
     process->setHasMemoryAllocated(false);

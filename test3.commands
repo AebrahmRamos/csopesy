@@ -1,0 +1,4 @@
+initialize
+screen -c faulty_process 256 "DECLARE varA 10; DECLARE varB 5; ADD varA varA varB; WRITE 0x500 varA; READ varC 0x500; PRINT("Variable A: " + varA); PRINT("Result: " + varC)"
+screen -ls
+exit

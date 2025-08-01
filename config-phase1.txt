@@ -1,0 +1,13 @@
+num-cpu 4
+scheduler fcfs
+quantum-cycles 5
+batch-process-freq 1
+min-ins 10
+max-ins 20
+delay-per-exec 0
+max-overall-mem 4096
+mem-per-frame 64
+min-mem-per-proc 256
+max-mem-per-proc 512
+hole-fit-policy F
+enable-virtual-memory false

@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+set timeout 15
+
+spawn ./csopesy
+
+expect "Enter a command:"
+send "initialize\r"
+
+expect "Enter a command:"
+send "screen -c faulty_process 256 \"DECLARE varA 10; DECLARE varB 5; ADD varA varA varB; WRITE 0x500 varA; READ varC 0x500; PRINT(\\\"Variable A: \\\" + varA); PRINT(\\\"Result: \\\" + varC)\\\"\r"
+
+expect "Enter a command:"
+send "exit\r"
+
+expect "Enter a command:"
+send "screen -ls\r"
+
+expect "Enter a command:"
+send "screen -r faulty_process\r"
+
+expect "\[Screen: faulty_process\] Enter command (or 'exit' to return):"
+send "exit\r"
+
+expect "Enter a command:"
+send "exit\r"
+
+expect eof

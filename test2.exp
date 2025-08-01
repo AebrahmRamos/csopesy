@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+set timeout 15
+
+spawn ./csopesy
+
+expect "Enter a command:"
+send "initialize\r"
+
+expect "Enter a command:"
+send "scheduler-test\r"
+
+sleep 5
+
+expect "Enter a command:"
+send "process-smi\r"
+
+expect "Enter a command:"
+send "screen -ls\r"
+
+expect "Enter a command:"
+send "vmstat\r"
+
+expect "Enter a command:"
+send "exit\r"
+
+expect eof
+
