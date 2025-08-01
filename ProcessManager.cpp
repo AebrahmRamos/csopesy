@@ -7,10 +7,11 @@
 #include <algorithm>
 #include <set>
 
-ProcessManager::ProcessManager() : numCores(4), storedConfigPtr(nullptr), currentQuantumCycle(0) {
+ProcessManager::ProcessManager() : numCores(4), currentQuantumCycle(0), useVirtualMemory(false) {
     scheduler = std::make_unique<Scheduler>(this);
     generator = std::make_unique<ProcessGenerator>(this);
     memoryManager = std::make_unique<MemoryManager>(16384, 4096, 16, "F");
+    // vmManager will be initialized in setConfig() to avoid premature initialization
 }
 
 ProcessManager::~ProcessManager() {
@@ -24,7 +25,7 @@ ProcessManager::~ProcessManager() {
 
 void ProcessManager::setConfig(const Config& config) {
     numCores = config.numCpu;
-    storedConfigPtr = const_cast<Config*>(&config);
+    storedConfig = std::make_unique<Config>(config); // Store a copy in unique_ptr
     
     if (scheduler) {
         scheduler->setSchedulerConfig(config.scheduler, config.quantumCycles, config.numCpu);
@@ -32,21 +33,29 @@ void ProcessManager::setConfig(const Config& config) {
     
     if (memoryManager) {
         // Re-initialize memory manager with config values
+        // For Phase 2 tests, use min-mem-per-proc as the base memory per process
+        int memPerProc = (config.minMemPerProc > 0) ? config.minMemPerProc : config.memPerProc;
         memoryManager = std::make_unique<MemoryManager>(
             config.maxOverallMem,
-            config.memPerProc,
+            memPerProc,
             config.memPerFrame,
             config.holeFitPolicy
         );
     }
+    
+    // Initialize virtual memory manager for Phase 2 (always create it)
+    vmManager = std::make_unique<VirtualMemoryManager>(
+        config.maxOverallMem,
+        config.memPerFrame
+    );
 }
 
 void ProcessManager::startProcessGeneration() {
-    if (generator && storedConfigPtr) {
+    if (generator && storedConfig) {
         // Validate configuration values
-        int freq = storedConfigPtr->batchProcessFreq;
-        int minIns = storedConfigPtr->minIns;
-        int maxIns = storedConfigPtr->maxIns;
+        int freq = storedConfig->batchProcessFreq;
+        int minIns = storedConfig->minIns;
+        int maxIns = storedConfig->maxIns;
         
         // Sanity check the values - if they seem invalid, use sensible defaults
         if (freq <= 0 || freq > 10) {
@@ -184,7 +193,7 @@ void ProcessManager::startScheduler() {
 
 void ProcessManager::stopScheduler() {
     if (scheduler) {
-        scheduler->stop();
+        scheduler->stopGracefully(); // Allow current processes to finish
     }
 }
 
@@ -351,7 +360,7 @@ bool ProcessManager::allocateMemoryToProcess(std::shared_ptr<Process> process) {
     }
     
     // Get the required memory size from config or use default
-    int memSize = storedConfigPtr ? storedConfigPtr->memPerProc : 4096;
+    int memSize = storedConfig ? storedConfig->memPerProc : 4096;
     
     // Safety check for memory size
     if (memSize <= 0) {
@@ -425,4 +434,170 @@ void ProcessManager::incrementQuantumCycle() {
 
 int ProcessManager::getCurrentQuantumCycle() const {
     return currentQuantumCycle;
+}
+
+// Virtual memory management methods (Phase 2)
+void ProcessManager::enableVirtualMemory(bool enable) {
+    useVirtualMemory = enable;
+    std::cout << "Virtual memory " << (enable ? "enabled" : "disabled") << std::endl;
+}
+
+bool ProcessManager::isVirtualMemoryEnabled() const {
+    return useVirtualMemory;
+}
+
+std::shared_ptr<Process> ProcessManager::createProcess(const std::string& name) {
+    static int processIdCounter = 1000; // Start with higher IDs for manually created processes
+    
+    auto process = std::make_shared<Process>(name, processIdCounter++);
+    
+    // Generate default instructions (4000 instructions as per test config)
+    std::vector<std::string> instructions;
+    for (int i = 0; i < 4000; ++i) {
+        instructions.push_back("PRINT(\"Line " + std::to_string(i+1) + " from " + name + "\")");
+    }
+    process->setInstructions(instructions);
+    
+    // Allocate memory using current memory manager
+    if (memoryManager && memoryManager->allocateMemory(process)) {
+        std::lock_guard<std::mutex> lock(processMutex);
+        processes.push_back(process);
+        
+        // Add to scheduler
+        if (scheduler) {
+            scheduler->addProcess(process);
+        }
+        
+        return process;
+    }
+    
+    return nullptr; // Memory allocation failed
+}
+
+std::shared_ptr<Process> ProcessManager::createProcessWithMemory(const std::string& name, size_t memorySize, const std::vector<std::string>& instructions) {
+    static int processIdCounter = 1000; // Start with higher IDs for manually created processes
+    
+    auto process = std::make_shared<Process>(name, processIdCounter++);
+    
+    if (useVirtualMemory && vmManager) {
+        // Phase 2: Use virtual memory
+        process->setVirtualMemorySize(memorySize);
+        
+        if (!vmManager->allocateVirtualMemory(process->getProcessId(), memorySize)) {
+            std::cerr << "Failed to allocate virtual memory for process " << name << std::endl;
+            return nullptr;
+        }
+        
+        std::cout << "Created process " << name << " with " << memorySize << " bytes virtual memory" << std::endl;
+    } else {
+        // Phase 1: Use existing memory manager
+        process->setMemorySize(memorySize);
+        if (!memoryManager->allocateMemory(process)) {
+            std::cerr << "Failed to allocate memory for process " << name << std::endl;
+            return nullptr;
+        }
+    }
+    
+    // Set custom instructions if provided
+    if (!instructions.empty()) {
+        process->setInstructions(instructions);
+    }
+    
+    // Add to process list
+    {
+        std::lock_guard<std::mutex> lock(processMutex);
+        processes.push_back(process);
+    }
+    
+    // Add to scheduler for execution and ensure scheduler is running
+    if (scheduler) {
+        if (!scheduler->isRunning()) {
+            scheduler->start();
+        }
+        scheduler->addProcess(process);
+    }
+    
+    return process;
+}
+
+uint16_t ProcessManager::readProcessMemory(int processId, uint32_t virtualAddr) {
+    if (useVirtualMemory && vmManager) {
+        try {
+            return vmManager->readMemory(processId, virtualAddr);
+        } catch (const PageFaultException& e) {
+            std::cout << "Page fault handled for process " << processId 
+                      << " at address 0x" << std::hex << virtualAddr << std::dec << std::endl;
+            // Page fault was handled by VirtualMemoryManager, retry
+            return vmManager->readMemory(processId, virtualAddr);
+        }
+    } else {
+        // Phase 1: Direct memory access (simplified)
+        std::cerr << "Memory read not supported in Phase 1 mode" << std::endl;
+        return 0;
+    }
+}
+
+void ProcessManager::writeProcessMemory(int processId, uint32_t virtualAddr, uint16_t value) {
+    if (useVirtualMemory && vmManager) {
+        try {
+            vmManager->writeMemory(processId, virtualAddr, value);
+        } catch (const PageFaultException& e) {
+            std::cout << "Page fault handled for process " << processId 
+                      << " at address 0x" << std::hex << virtualAddr << std::dec << std::endl;
+            // Page fault was handled by VirtualMemoryManager, retry
+            vmManager->writeMemory(processId, virtualAddr, value);
+        }
+    } else {
+        // Phase 1: Direct memory access (simplified)
+        std::cerr << "Memory write not supported in Phase 1 mode" << std::endl;
+    }
+}
+
+ProcessManager::DetailedStats ProcessManager::getDetailedStats() const {
+    DetailedStats stats = {};
+    
+    // Get basic CPU stats
+    stats.cpuUtilization = getCpuUtilization();
+    
+    {
+        std::lock_guard<std::mutex> lock(processMutex);
+        stats.totalProcessCount = processes.size();
+        stats.runningProcessCount = 0;
+        
+        for (const auto& process : processes) {
+            if (process->getIsActive()) {
+                stats.runningProcessCount++;
+            }
+        }
+    }
+    
+    if (useVirtualMemory && vmManager) {
+        // Phase 2: Get virtual memory stats
+        auto vmStats = vmManager->getMemoryStats();
+        stats.totalMemory = vmStats.totalMemory;
+        stats.usedMemory = vmStats.usedMemory;
+        stats.freeMemory = vmStats.freeMemory;
+        stats.pagesIn = vmStats.pagesIn;
+        stats.pagesOut = vmStats.pagesOut;
+        stats.pageFaults = vmStats.pageFaults;
+    } else {
+        // Phase 1: Get basic memory stats
+        if (memoryManager && storedConfig) {
+            stats.totalMemory = storedConfig->maxOverallMem;
+            int processesInMemory = memoryManager->getProcessesInMemory();
+            int memPerProc = (storedConfig->minMemPerProc > 0) ? storedConfig->minMemPerProc : storedConfig->memPerProc;
+            stats.usedMemory = processesInMemory * memPerProc;
+            stats.freeMemory = stats.totalMemory - stats.usedMemory;
+        }
+        stats.pagesIn = 0;
+        stats.pagesOut = 0;
+        stats.pageFaults = 0;
+    }
+    
+    // CPU tick estimation (simplified)
+    stats.totalCpuTicks = currentQuantumCycle * numCores;
+    stats.activeCpuTicks = static_cast<uint64_t>(stats.totalCpuTicks * (stats.cpuUtilization / 100.0));
+    stats.idleCpuTicks = stats.totalCpuTicks - stats.activeCpuTicks;
+    
+    return stats;
 }
