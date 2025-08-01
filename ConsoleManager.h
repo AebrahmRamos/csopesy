@@ -39,6 +39,7 @@ struct ProcessInfo {
 };
 
 struct Config {
+    // Phase 1 parameters
     int numCpu = 2;
     std::string scheduler = "rr";
     int quantumCycles = 4;
@@ -46,10 +47,18 @@ struct Config {
     int minIns = 100;
     int maxIns = 100;
     int delaysPerExec = 0;
+    
+    // Memory management parameters
     int maxOverallMem = 16384;
     int memPerFrame = 16;
     int memPerProc = 4096;
     std::string holeFitPolicy = "F"; // F for First-fit
+    
+    // Phase 2 parameters
+    bool enableVirtualMemory = false;        // Enable virtual memory management
+    int minMemPerProc = 64;                  // Minimum process memory
+    int maxMemPerProc = 4096;                // Maximum process memory
+    std::string pageReplacementAlg = "LRU";  // Page replacement algorithm
     
     bool isValid = false;
     std::string errorMessage = "";
@@ -87,6 +96,10 @@ private:
     std::vector<ProcessInfo> getRealProcessData();
     std::string extractCommandValue(const std::string& command, const std::string type);
     
+    // Phase 2 helper functions for enhanced screen commands
+    size_t extractMemorySize(const std::string& command);
+    std::vector<std::string> extractCustomInstructions(const std::string& command);
+    
     // Helper functions for ADD/SUBTRACT operations
     void ensureVariableExists(const std::string& varName);
     uint16_t getVariableValue(const std::string& varName);
@@ -106,6 +119,8 @@ public:
     void commandStatus();
     void commandReportUtil();
     void commandNvidiaSmi();
+    void commandProcessSmi();
+    void commandVmstat();
     void commandClear();
     void commandExit();
     void createScreen(const std::string& name);

@@ -23,7 +23,7 @@ ConsoleManager::~ConsoleManager() {
 }
 
 std::string ConsoleManager::extractName(const std::string& command) {
-    std::regex pattern(R"(screen\s+-[rs]\s+(\S+))");
+    std::regex pattern(R"(screen\s+-[rsc]\s+(\S+))");
     std::smatch match;
     if (std::regex_search(command, match, pattern) && match.size() > 1) {
         return match[1];
@@ -136,7 +136,7 @@ bool ConsoleManager::loadConfig(const std::string& filename) {
             config.minIns = std::stoi(value);
         } else if (key == "max-ins") {
             config.maxIns = std::stoi(value);
-        } else if (key == "delays-per-exec") {
+        } else if (key == "delay-per-exec") {
             config.delaysPerExec = std::stoi(value);
         } else if (key == "max-overall-mem") {
             config.maxOverallMem = std::stoi(value);
@@ -146,10 +146,25 @@ bool ConsoleManager::loadConfig(const std::string& filename) {
             config.memPerProc = std::stoi(value);
         } else if (key == "hole-fit-policy") {
             config.holeFitPolicy = value;
+        } else if (key == "enable-virtual-memory") {
+            config.enableVirtualMemory = (value == "true" || value == "1");
+        } else if (key == "min-mem-per-proc") {
+            config.minMemPerProc = std::stoi(value);
+        } else if (key == "max-mem-per-proc") {
+            config.maxMemPerProc = std::stoi(value);
+        } else if (key == "page-replacement-alg") {
+            config.pageReplacementAlg = value;
         }
     }
     
     file.close();
+    
+    // For Phase 2: If min-mem-per-proc and max-mem-per-proc are set but mem-per-proc is not,
+    // use min-mem-per-proc as the base memory per process
+    if (config.memPerProc == 4096 && config.minMemPerProc > 0 && config.maxMemPerProc > 0) {
+        config.memPerProc = config.minMemPerProc;
+    }
+    
     return validateConfig();
 }
 
@@ -168,9 +183,9 @@ bool ConsoleManager::validateConfig() {
         return false;
     }
     
-    // Checks if quyantum-cycles is valid
-    if (config.quantumCycles < 1) {
-        config.errorMessage = "quantum-cycles must be >= 1. Got: " + std::to_string(config.quantumCycles);
+    // Checks if quantum-cycles is valid (0 is allowed for FCFS)
+    if (config.quantumCycles < 0) {
+        config.errorMessage = "quantum-cycles must be >= 0. Got: " + std::to_string(config.quantumCycles);
         config.isValid = false;
         return false;
     }
@@ -228,8 +243,27 @@ bool ConsoleManager::validateConfig() {
         return false;
     }
     
-    if (config.holeFitPolicy != "F") {
-        config.errorMessage = "hole-fit-policy must be 'F' for First-fit. Got: " + config.holeFitPolicy;
+    if (config.holeFitPolicy != "F" && config.holeFitPolicy != "B" && config.holeFitPolicy != "W") {
+        config.errorMessage = "hole-fit-policy must be 'F' (First-fit), 'B' (Best-fit), or 'W' (Worst-fit). Got: " + config.holeFitPolicy;
+        config.isValid = false;
+        return false;
+    }
+    
+    // Validate Phase 2 parameters
+    if (config.minMemPerProc < 64 || config.minMemPerProc > 65536) {
+        config.errorMessage = "min-mem-per-proc must be between 64 and 65536. Got: " + std::to_string(config.minMemPerProc);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.maxMemPerProc < config.minMemPerProc || config.maxMemPerProc > 65536) {
+        config.errorMessage = "max-mem-per-proc must be between min-mem-per-proc and 65536. Got: " + std::to_string(config.maxMemPerProc);
+        config.isValid = false;
+        return false;
+    }
+    
+    if (config.pageReplacementAlg != "LRU" && config.pageReplacementAlg != "FIFO") {
+        config.errorMessage = "page-replacement-alg must be 'LRU' or 'FIFO'. Got: " + config.pageReplacementAlg;
         config.isValid = false;
         return false;
     }
@@ -262,30 +296,52 @@ void ConsoleManager::printHeader() {
 void ConsoleManager::commandHelp() {
     if (inMainMenu) {
         std::cout << "\n\033[32m=== CSOPESY Command Help ===\033[0m\n";
-        std::cout << "  initialize     - Initialize the system\n";
-        std::cout << "  screen -s <n>  - Create a new screen session\n";
-        std::cout << "  screen -r <n>  - Resume an existing screen session\n";
-        std::cout << "  screen -ls     - List all screen sessions and CPU utilization\n";
+        std::cout << "  initialize      - Initialize the system\n";
+        std::cout << "  screen -s <n>   - Create a new screen session\n";
+        std::cout << "  screen -r <n>   - Resume an existing screen session\n";
+        std::cout << "  screen -ls      - List all screen sessions and CPU utilization\n";
         std::cout << "  scheduler-start - Start automatic process generation\n";
-        std::cout << "  scheduler-stop - Stop scheduler\n";
-        std::cout << "  report-util    - Generate report\n";
-        std::cout << "  clear          - Clear the screen\n";
-        std::cout << "  help           - Show this help menu\n";
-        std::cout << "  exit           - Exit the application\n";
-        std::cout << "  nvidia-smi     - Shows GPU summary and running processes\n";
+        std::cout << "  scheduler-stop  - Stop scheduler\n";
+        std::cout << "  scheduler-test  - Run scheduler test\n";
+        std::cout << "  report-util     - Generate report\n";
+        std::cout << "  clear           - Clear the screen\n";
+        std::cout << "  help            - Show this help menu\n";
+        std::cout << "  exit            - Exit the application\n";
+        std::cout << "  nvidia-smi      - Shows GPU summary and running processes\n";
+        
+        // Show Phase 2 commands if virtual memory is enabled
+        if (processManager && processManager->isVirtualMemoryEnabled()) {
+            std::cout << "\n\033[36m=== Phase 2 Commands (Virtual Memory) ===\033[0m\n";
+            std::cout << "  process-smi             - Show memory and process information\n";
+            std::cout << "  vmstat                  - Show virtual memory statistics\n";
+            std::cout << "  screen -s <n> <size>    - Create screen with memory size\n";
+            std::cout << "  screen -c <n> <size> \"<instructions>\" - Create screen with custom instructions\n";
+        }
     } else {
         std::cout << "\n\033[32m=== Screen Session Help ===\033[0m\n";
         std::cout << "  process-smi - Show process information\n";
         std::cout << "  exit - Return to main menu\n";
         std::cout << "  help - Show this help menu\n";
+        std::cout << "  clear - Clear the screen\n";
+        
+        if (processManager && processManager->isVirtualMemoryEnabled()) {
+            std::cout << "\n\033[36m=== Phase 2 Instructions ===\033[0m\n";
+            std::cout << "  READ(var, address)  - Read from memory address into variable\n";
+            std::cout << "  WRITE(address, val) - Write value to memory address\n";
+        }
+        
+        std::cout << "\n\033[33m=== Standard Instructions ===\033[0m\n";
+        std::cout << "  PRINT(\"message\")     - Print a message\n";
+        std::cout << "  DECLARE(var, value)  - Declare a variable\n";
+        std::cout << "  ADD(result, a, b)    - Add two values\n";
+        std::cout << "  SUBTRACT(result, a, b) - Subtract two values\n";
+        std::cout << "  SLEEP(ticks)         - Sleep for specified ticks\n";
         std::cout << "  Any other command will simulate process execution\n";
     }
 }
 
 void ConsoleManager::commandInitialize() {
-    Config config;
-    
-    if (loadConfig(config)) {
+    if (loadConfig("config.txt")) {
         std::cout << "OS initialized with configuration:\n";
         std::cout << "  num-cpu: " << config.numCpu << "\n";
         std::cout << "  scheduler: " << config.scheduler << "\n";
@@ -298,8 +354,29 @@ void ConsoleManager::commandInitialize() {
         std::cout << "  mem-per-proc: " << config.memPerProc << "\n";
         std::cout << "  hole-fit-policy: " << config.holeFitPolicy << "\n";
         
+        // Phase 2 parameters
+        if (config.enableVirtualMemory) {
+            std::cout << "  enable-virtual-memory: true\n";
+            std::cout << "  min-mem-per-proc: " << config.minMemPerProc << "\n";
+            std::cout << "  max-mem-per-proc: " << config.maxMemPerProc << "\n";
+            std::cout << "  page-replacement-alg: " << config.pageReplacementAlg << "\n";
+        } else {
+            std::cout << "  enable-virtual-memory: false (Phase 1 mode)\n";
+        }
+        
         if (processManager) {
             processManager->setConfig(config);
+            
+            // Enable virtual memory if configured
+            if (config.enableVirtualMemory) {
+                processManager->enableVirtualMemory(true);
+                std::cout << "\nVirtual Memory System Enabled!\n";
+                std::cout << "New commands available: process-smi, vmstat\n";
+                std::cout << "Improved screen instruction usage: screen -s <name> <memory_size>, screen -c <name> <memory_size> \"<instructions>\"\n";
+                std::cout << "New instructions: READ(var, address), WRITE(address, value)\n";
+            } else {
+                std::cout << "\nPhase 1 Mode: Basic memory management enabled\n";
+            }
         }
         
         initialized = true;
@@ -336,16 +413,34 @@ void ConsoleManager::commandSchedulerStart() {
 }
 
 void ConsoleManager::commandSchedulerTest() {
+    if (!initialized) {
+        std::cout << "System not initialized. Please run 'initialize' first." << std::endl;
+        return;
+    }
+    
     if (processManager) {
-        processManager->showProcessStatus();
+        std::cout << "Starting scheduler test..." << std::endl;
+        
+        // Start the scheduler first (if not already running)
+        if (!processManager->hasActiveProcesses()) {
+            processManager->startScheduler();
+        }
+        
+        // Start process generation to create test processes
+        processManager->startProcessGeneration();
+        
+        std::cout << "Scheduler test initiated. Processes are being generated and scheduled." << std::endl;
+        std::cout << "Use 'scheduler-stop' to stop the test, then 'screen -ls' to view results." << std::endl;
+    } else {
+        std::cout << "Error: Process manager not available." << std::endl;
     }
 }
 
 void ConsoleManager::commandSchedulerStop() {
     if (processManager) {
         processManager->stopProcessGeneration();
-        // processManager->stopScheduler();
-        // std::cout << "Scheduler and process generation stopped." << std::endl;
+        processManager->stopScheduler();
+        std::cout << "Scheduler and process generation stopped." << std::endl;
     }
 }
 
@@ -422,7 +517,14 @@ void ConsoleManager::createScreen(const std::string& name) {
             screen->attachToProcess(process);
             std::cout << "Screen attached to existing process: " << name << std::endl;
         } else {
-            std::cout << "No process found with name '" << name << "'. Screen created without attached process." << std::endl;
+            // Create a new process with the screen name
+            auto newProcess = processManager->createProcess(name);
+            if (newProcess) {
+                screen->attachToProcess(newProcess);
+                std::cout << "Created new process '" << name << "' and attached to screen." << std::endl;
+            } else {
+                std::cout << "Failed to create process '" << name << "'. Screen created without attached process." << std::endl;
+            }
         }
     }
     
@@ -459,7 +561,9 @@ void ConsoleManager::handleScreenCommand(const std::string& command) {
     std::string processName = extractName(command);
     if (processName.empty()) {
         std::cout << "Invalid screen command format." << std::endl;
-        std::cout << "Usage: screen -s <name> or screen -r <name>" << std::endl;
+        std::cout << "Usage: screen -s <name> [memory_size]" << std::endl;
+        std::cout << "       screen -r <name>" << std::endl;
+        std::cout << "       screen -c <name> <memory_size> \"<instructions>\"" << std::endl;
         return;
     }
     
@@ -469,7 +573,60 @@ void ConsoleManager::handleScreenCommand(const std::string& command) {
         if (it != screens.end()) {
             std::cout << "Screen '" << processName << "' already exists. Use 'screen -r " << processName << "' to resume." << std::endl;
         } else {
-            createScreen(processName);
+            // Extract memory size if provided (Phase 2 enhancement)
+            size_t memorySize = extractMemorySize(command);
+            if (memorySize == 0) {
+                memorySize = 4096; // Default memory size
+            }
+            
+            if (processManager->isVirtualMemoryEnabled()) {
+                // Phase 2: Create process with virtual memory
+                std::vector<std::string> defaultInstructions;
+                auto process = processManager->createProcessWithMemory(processName, memorySize, defaultInstructions);
+                if (process) {
+                    std::cout << "Created process '" << processName << "' with " << memorySize << " bytes memory." << std::endl;
+                    createScreen(processName);
+                } else {
+                    std::cout << "Failed to create process with virtual memory." << std::endl;
+                }
+            } else {
+                // Phase 1: Use existing method
+                createScreen(processName);
+            }
+        }
+    }
+    else if (findCommand(command, "screen -c")) {
+        // Phase 2: Create process with custom instructions
+        if (it != screens.end()) {
+            std::cout << "Screen '" << processName << "' already exists. Use 'screen -r " << processName << "' to resume." << std::endl;
+        } else {
+            size_t memorySize = extractMemorySize(command);
+            if (memorySize == 0 && getOSConfig()) {
+                // Use default memory size from config if not specified
+                memorySize = (getOSConfig()->minMemPerProc > 0) ? getOSConfig()->minMemPerProc : getOSConfig()->memPerProc;
+            }
+            if (memorySize == 0) {
+                std::cout << "Memory size required for screen -c command." << std::endl;
+                std::cout << "Usage: screen -c <name> [memory_size] \"<instructions>\"" << std::endl;
+                return;
+            }
+            
+            std::vector<std::string> customInstructions = extractCustomInstructions(command);
+            if (customInstructions.empty()) {
+                std::cout << "Custom instructions required for screen -c command." << std::endl;
+                std::cout << "Usage: screen -c <name> <memory_size> \"<instructions>\"" << std::endl;
+                return;
+            }
+            
+            // Create process with custom instructions (works in both Phase 1 and Phase 2)
+            auto process = processManager->createProcessWithMemory(processName, memorySize, customInstructions);
+            if (process) {
+                std::cout << "Created process '" << processName << "' with " << memorySize << " bytes memory and " 
+                          << customInstructions.size() << " custom instructions." << std::endl;
+                createScreen(processName);
+            } else {
+                std::cout << "Failed to create process with custom instructions." << std::endl;
+            }
         }
     }
     else if (findCommand(command, "screen -r")) {
@@ -520,6 +677,9 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     else if (command == "scheduler-stop" && initialized) {
         commandSchedulerStop();
     }
+    else if (command == "scheduler-test" && initialized) {
+        commandSchedulerStart(); // scheduler-test is deprecated, use scheduler-start functionality
+    }
     else if (command == "scheduler-help" && initialized) {
         commandSchedulerHelp();
     }
@@ -531,6 +691,12 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     }
     else if (command == "nvidia-smi" && initialized) {
         commandNvidiaSmi();
+    }
+    else if (command == "process-smi" && initialized) {
+        commandProcessSmi();
+    }
+    else if (command == "vmstat" && initialized) {
+        commandVmstat();
     }
     else if (command == "clear" && initialized) {
         commandClear();
@@ -544,7 +710,7 @@ void ConsoleManager::processMainMenuCommand(const std::string& command) {
     else if (command == "screen -ls" && initialized) {
         listScreens();
     }
-    else if (std::regex_match(command, std::regex(R"(screen\s+-[rs]\s+\S+)")) && initialized) {
+    else if (std::regex_match(command, std::regex(R"(screen\s+-[rsc]\s+\S+.*)")) && initialized) {
         handleScreenCommand(command);
     }
     else if (!initialized && command != "initialize" && command != "exit") {
@@ -1005,13 +1171,16 @@ void ConsoleManager::commandStatus() {
         std::cout << "  Total memory: " << ptr->maxOverallMem << " bytes\n";
         std::cout << "  Memory per process: " << ptr->memPerProc << " bytes\n";
         std::cout << "  Memory per frame: " << ptr->memPerFrame << " bytes\n";
-        std::cout << "  Allocation policy: " << (ptr->holeFitPolicy == "F" ? "First-fit" : ptr->holeFitPolicy) << "\n\n";
+        std::string policyName = (ptr->holeFitPolicy == "F" ? "First-fit" : 
+                                 (ptr->holeFitPolicy == "B" ? "Best-fit" : 
+                                 (ptr->holeFitPolicy == "W" ? "Worst-fit" : ptr->holeFitPolicy)));
+        std::cout << "  Allocation policy: " << policyName << "\n\n";
     }
     
     // Display process status
     processManager->showProcessStatus();
     
-    std::cout << "\nTo see detailed memory allocation, check memory_stamp_XX.txt files.\n";
+    std::cout << "\nTo see detailed memory allocation, check memory_stamps/memory_stamp_XX.txt files.\n";
 }
 
 bool ConsoleManager::loadConfig(Config& cfg) {
@@ -1030,12 +1199,224 @@ bool ConsoleManager::loadConfig(Config& cfg) {
     cfg.holeFitPolicy = "F"; // F for First-fit
     
     // Try loading from config file, but use defaults if not found or invalid
+    Config tempConfig = cfg; // Save defaults
     bool fileLoaded = loadConfig("config.txt");
     if (fileLoaded) {
-        cfg = config;
+        cfg = config; // Use loaded config
     } else {
+        cfg = tempConfig; // Keep defaults
         cfg.isValid = true;
     }
     
     return cfg.isValid;
+}
+
+// Phase 2: process-smi command implementation
+void ConsoleManager::commandProcessSmi() {
+    if (!processManager) {
+        std::cout << "Process manager not available." << std::endl;
+        return;
+    }
+    
+    auto stats = processManager->getDetailedStats();
+    
+    std::cout << "\n";
+    std::cout << "+-----------------------------------------------------------------------------------------+\n";
+    std::cout << "| PROCESS-SMI 1.0.0                    Driver Version: 1.0.0      Memory Version: 1.0   |\n";  
+    std::cout << "|-----------------------------------------+------------------------+----------------------|\n";
+    std::cout << "| CPU-Util                     Memory    | Procs:                 | GPU-Util   Process   |\n";
+    std::cout << std::fixed << std::setprecision(1);
+    std::cout << "| " << std::setw(3) << stats.cpuUtilization << "%     ";
+    std::cout << std::setw(8) << stats.usedMemory << "MB / " << std::setw(8) << stats.totalMemory << "MB";
+    std::cout << " | " << std::setw(3) << stats.runningProcessCount << " running          ";
+    std::cout << "| " << std::setw(6) << stats.cpuUtilization << "%   Active     |\n";
+    std::cout << "|=========================================+========================+======================|\n";
+    
+    // Show running processes
+    auto runningProcesses = processManager->getRunningProcesses();
+    if (runningProcesses.empty()) {
+        std::cout << "| No running processes.                                                                   |\n";
+    } else {
+        std::cout << "| GPU   PID    Type           Process name                           GPU Memory Usage      |\n";
+        std::cout << "|       ID     Process                                               MiB                   |\n";
+        std::cout << "|=======================================================================================|\n";
+        
+        for (const auto& process : runningProcesses) {
+            std::cout << "|  0   " << std::setw(6) << process->getProcessId() 
+                      << "    C           " << std::setw(32) << process->getName();
+            
+            size_t memSize = 0;
+            if (processManager->isVirtualMemoryEnabled()) {
+                memSize = process->getVirtualMemorySize();
+            } else {
+                memSize = process->getMemorySize();
+            }
+            
+            std::cout << "           " << std::setw(6) << (memSize / 1024) << "MiB     |\n";
+        }
+    }
+    
+    std::cout << "+-----------------------------------------------------------------------------------------+\n";
+    
+    // Show memory statistics
+    std::cout << "\nMemory Statistics:\n";
+    std::cout << "Total Memory: " << stats.totalMemory << " bytes\n";
+    std::cout << "Used Memory:  " << stats.usedMemory << " bytes\n";
+    std::cout << "Free Memory:  " << stats.freeMemory << " bytes\n";
+    
+    if (processManager->isVirtualMemoryEnabled()) {
+        std::cout << "Page Faults:  " << stats.pageFaults << "\n";
+        std::cout << "Pages In:     " << stats.pagesIn << "\n";
+        std::cout << "Pages Out:    " << stats.pagesOut << "\n";
+    }
+    
+    std::cout << "\nCPU Statistics:\n";
+    std::cout << "CPU Cores:        " << processManager->getNumCores() << "\n";
+    std::cout << "CPU Utilization:  " << std::fixed << std::setprecision(2) << stats.cpuUtilization << "%\n";
+    std::cout << "Running Processes: " << stats.runningProcessCount << "\n";
+    std::cout << "Total Processes:   " << stats.totalProcessCount << "\n";
+}
+
+// Phase 2: vmstat command implementation  
+void ConsoleManager::commandVmstat() {
+    if (!processManager) {
+        std::cout << "Process manager not available." << std::endl;
+        return;
+    }
+    
+    auto stats = processManager->getDetailedStats();
+    
+    std::cout << "\nSystem Virtual Memory Statistics\n";
+    std::cout << "================================\n";
+    
+    // Memory statistics
+    std::cout << "Memory:\n";
+    std::cout << "  Total Memory:     " << std::setw(10) << stats.totalMemory << " bytes\n";
+    std::cout << "  Used Memory:      " << std::setw(10) << stats.usedMemory << " bytes\n";
+    std::cout << "  Free Memory:      " << std::setw(10) << stats.freeMemory << " bytes\n";
+    std::cout << "  Memory Usage:     " << std::setw(10) << std::fixed << std::setprecision(1) 
+              << (stats.totalMemory > 0 ? (double)stats.usedMemory / stats.totalMemory * 100.0 : 0.0) << "%\n";
+    
+    std::cout << "\nCPU:\n";
+    std::cout << "  CPU Ticks (Total): " << std::setw(10) << stats.totalCpuTicks << "\n";
+    std::cout << "  CPU Ticks (Idle):  " << std::setw(10) << stats.idleCpuTicks << "\n";  
+    std::cout << "  CPU Ticks (Active):" << std::setw(10) << stats.activeCpuTicks << "\n";
+    std::cout << "  CPU Utilization:   " << std::setw(10) << std::fixed << std::setprecision(2) 
+              << stats.cpuUtilization << "%\n";
+    
+    if (processManager->isVirtualMemoryEnabled()) {
+        std::cout << "\nVirtual Memory:\n";
+        std::cout << "  Page Faults:      " << std::setw(10) << stats.pageFaults << "\n";
+        std::cout << "  Pages In:         " << std::setw(10) << stats.pagesIn << "\n";
+        std::cout << "  Pages Out:        " << std::setw(10) << stats.pagesOut << "\n";
+        
+        if (stats.pageFaults > 0) {
+            double hitRatio = 1.0 - ((double)stats.pageFaults / (stats.pagesIn + stats.pageFaults));
+            std::cout << "  Page Hit Ratio:   " << std::setw(10) << std::fixed << std::setprecision(3) 
+                      << hitRatio * 100.0 << "%\n";
+        }
+    } else {
+        std::cout << "\nVirtual Memory: Disabled (Phase 1 mode)\n";
+    }
+    
+    std::cout << "\nProcess Information:\n";
+    std::cout << "  Total Processes:   " << std::setw(10) << stats.totalProcessCount << "\n";
+    std::cout << "  Running Processes: " << std::setw(10) << stats.runningProcessCount << "\n";
+    std::cout << "  Finished Processes:" << std::setw(10) << (stats.totalProcessCount - stats.runningProcessCount) << "\n";
+    
+    // Show recent processes
+    auto runningProcesses = processManager->getRunningProcesses();
+    if (!runningProcesses.empty()) {
+        std::cout << "\nCurrently Running Processes:\n";
+        std::cout << "PID\tName\t\tCore\tMemory (bytes)\n";
+        std::cout << "---\t----\t\t----\t--------------\n";
+        
+        for (const auto& process : runningProcesses) {
+            size_t memSize = processManager->isVirtualMemoryEnabled() ? 
+                            process->getVirtualMemorySize() : process->getMemorySize();
+            
+            std::cout << process->getProcessId() << "\t" 
+                      << process->getName().substr(0, 12) << "\t" 
+                      << process->getAssignedCore() << "\t" 
+                      << memSize << "\n";
+        }
+    }
+}
+
+// Phase 2: Helper functions for enhanced screen commands
+size_t ConsoleManager::extractMemorySize(const std::string& command) {
+    // Parse commands like:
+    // "screen -s process1 1024"
+    // "screen -c process1 2048 \"PRINT(hello)\""
+    
+    std::istringstream iss(command);
+    std::vector<std::string> tokens;
+    std::string token;
+    
+    while (iss >> token) {
+        tokens.push_back(token);
+    }
+    
+    // Look for numeric token after process name
+    if (tokens.size() >= 4) { // screen, -s/-c, name, memory_size, ...
+        try {
+            size_t memSize = std::stoull(tokens[3]);
+            // Validate memory size (must be power of 2 and within range)
+            if (memSize >= 64 && memSize <= 65536) {
+                // Check if it's a power of 2
+                if ((memSize & (memSize - 1)) == 0) {
+                    return memSize;
+                } else {
+                    std::cout << "Warning: Memory size should be a power of 2. Using closest valid size." << std::endl;
+                    // Round up to next power of 2
+                    size_t validSize = 64;
+                    while (validSize < memSize && validSize < 65536) {
+                        validSize *= 2;
+                    }
+                    return validSize;
+                }
+            }
+        } catch (const std::exception& e) {
+            // Not a valid number, ignore
+        }
+    }
+    
+    return 0; // No valid memory size found
+}
+
+std::vector<std::string> ConsoleManager::extractCustomInstructions(const std::string& command) {
+    std::vector<std::string> instructions;
+    
+    // Find quoted instruction block
+    size_t firstQuote = command.find('"');
+    size_t lastQuote = command.rfind('"');
+    
+    if (firstQuote != std::string::npos && lastQuote != std::string::npos && firstQuote != lastQuote) {
+        std::string instructionBlock = command.substr(firstQuote + 1, lastQuote - firstQuote - 1);
+        
+        // Split instructions by semicolon or newline
+        std::istringstream iss(instructionBlock);
+        std::string instruction;
+        
+        while (std::getline(iss, instruction, ';')) {
+            // Trim whitespace
+            instruction.erase(0, instruction.find_first_not_of(" \t\n\r"));
+            instruction.erase(instruction.find_last_not_of(" \t\n\r") + 1);
+            
+            if (!instruction.empty()) {
+                instructions.push_back(instruction);
+            }
+        }
+        
+        // If no semicolon separator, treat entire block as single instruction
+        if (instructions.empty() && !instructionBlock.empty()) {
+            instructionBlock.erase(0, instructionBlock.find_first_not_of(" \t\n\r"));
+            instructionBlock.erase(instructionBlock.find_last_not_of(" \t\n\r") + 1);
+            if (!instructionBlock.empty()) {
+                instructions.push_back(instructionBlock);
+            }
+        }
+    }
+    
+    return instructions;
 }
