@@ -266,9 +266,13 @@ int MemoryManager::calculateExternalFragmentation() const {
 void MemoryManager::generateMemorySnapshot(int quantumCycle) {
     currentQuantum = quantumCycle;
     
-    // Create filename
+    // Create memory_stamps directory if it doesn't exist
+    std::string dir = "memory_stamps";
+    std::system(("mkdir -p " + dir).c_str());
+    
+    // Create filename with directory path
     std::stringstream filename;
-    filename << "memory_stamp_" << std::setw(2) << std::setfill('0') << quantumCycle << ".txt";
+    filename << dir << "/memory_stamp_" << std::setw(2) << std::setfill('0') << quantumCycle << ".txt";
     
     std::ofstream file(filename.str());
     if (!file) {
