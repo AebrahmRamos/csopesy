@@ -8,6 +8,7 @@ Process::Process(const std::string& name, int id, int totalCommands)
     : processName(name), processId(id), currentLine(1), totalLines(totalCommands), 
       isActive(true), assignedCore(-1), startTime(std::chrono::steady_clock::now()),
       hasMemoryAllocated(false), memorySize(0), memoryStartAddress(-1), memoryEndAddress(-1),
+      virtualMemorySize(0), virtualBaseAddress(0),
       currentInstructionIndex(0), isExecutingAutomatically(false) {
     
     time_t t = time(nullptr);
@@ -121,6 +122,39 @@ void Process::ensureVariableExists(const std::string& name) {
 
 std::map<std::string, uint16_t> Process::getAllVariables() const {
     return variables;
+}
+
+// Virtual memory methods for Phase 2
+void Process::setVirtualMemorySize(size_t size) {
+    virtualMemorySize = size;
+}
+
+size_t Process::getVirtualMemorySize() const {
+    return virtualMemorySize;
+}
+
+void Process::setVirtualBaseAddress(uint32_t address) {
+    virtualBaseAddress = address;
+}
+
+uint32_t Process::getVirtualBaseAddress() const {
+    return virtualBaseAddress;
+}
+
+uint16_t Process::readVirtualMemory(uint32_t virtualAddr) {
+    // This will be implemented to work with VirtualMemoryManager
+    // For now, placeholder that will be integrated with ProcessManager
+    throw std::runtime_error("Virtual memory access not yet integrated with VirtualMemoryManager");
+}
+
+void Process::writeVirtualMemory(uint32_t virtualAddr, uint16_t value) {
+    // This will be implemented to work with VirtualMemoryManager
+    // For now, placeholder that will be integrated with ProcessManager
+    throw std::runtime_error("Virtual memory access not yet integrated with VirtualMemoryManager");
+}
+
+bool Process::isValidVirtualAddress(uint32_t virtualAddr) const {
+    return virtualAddr < virtualMemorySize;
 }
 
 // Execution state methods

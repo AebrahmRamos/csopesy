@@ -23,6 +23,10 @@ private:
     int memoryStartAddress;
     int memoryEndAddress;
     
+    // Virtual memory attributes for Phase 2
+    size_t virtualMemorySize;
+    uint32_t virtualBaseAddress;
+    
     // Instruction execution support
     std::vector<std::string> instructions;
     int currentInstructionIndex;
@@ -69,6 +73,17 @@ public:
     bool hasVariable(const std::string& name) const;
     void ensureVariableExists(const std::string& name);
     std::map<std::string, uint16_t> getAllVariables() const;
+    
+    // Virtual memory methods for Phase 2
+    void setVirtualMemorySize(size_t size);
+    size_t getVirtualMemorySize() const;
+    void setVirtualBaseAddress(uint32_t address);
+    uint32_t getVirtualBaseAddress() const;
+    
+    // Memory access methods that may trigger page faults
+    uint16_t readVirtualMemory(uint32_t virtualAddr);
+    void writeVirtualMemory(uint32_t virtualAddr, uint16_t value);
+    bool isValidVirtualAddress(uint32_t virtualAddr) const;
     
     // Execution state
     bool isAutoExecuting() const;
