@@ -110,7 +110,8 @@ void BackingStore::deallocateDiskSpace(uint32_t diskAddress) {
 }
 
 // VirtualMemoryManager Implementation
-VirtualMemoryManager::VirtualMemoryManager(int totalPhysicalMemory, int frameSize) {
+VirtualMemoryManager::VirtualMemoryManager(int totalPhysicalMemory, int frameSize) 
+    : PAGE_SIZE(frameSize) {  // Initialize PAGE_SIZE with frameSize from config
     // Initialize physical memory
     physicalMemory.resize(totalPhysicalMemory, 0);
     

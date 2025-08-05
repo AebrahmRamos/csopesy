@@ -90,7 +90,7 @@ public:
 // Main Virtual Memory Manager
 class VirtualMemoryManager {
 private:
-    static constexpr int PAGE_SIZE = 16;           // 16 bytes per page (as per config)
+    int PAGE_SIZE;                                 // Dynamic page size from config
     static constexpr int SYMBOL_TABLE_SIZE = 64;   // 64 bytes for variables
     
     // Page tables for each process (processId -> page table)

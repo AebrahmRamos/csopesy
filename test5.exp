@@ -1,5 +1,5 @@
 #!/usr/bin/expect -f
-set timeout 20
+set timeout 30
 
 spawn ./csopesy
 
@@ -9,20 +9,20 @@ send "initialize\r"
 expect "Enter a command:"
 send "scheduler-test\r"
 
-sleep 2
+sleep 5
 
 expect "Enter a command:"
-send "process-smi\r"
+send "scheduler-stop\r"
 
-expect "Enter a command:"
-send "screen -ls\r"
-
-# Run vmstat 10 times with 1-2 second intervals
-for {set i 0} {$i < 10} {incr i} {
+# Check process-smi periodically for 10 seconds
+for {set i 0} {$i < 5} {incr i} {
     expect "Enter a command:"
-    send "vmstat\r"
-    sleep 1
+    send "process-smi\r"
+    sleep 2
 }
+
+expect "Enter a command:"
+send "vmstat\r"
 
 expect "Enter a command:"
 send "exit\r"

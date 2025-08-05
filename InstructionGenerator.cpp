@@ -30,8 +30,8 @@ std::string InstructionGenerator::generateRandomInstruction(
     const std::string& processName,
     bool allowNestedInstructions
 ) {
-    // Instruction types: PRINT, DECLARE, ADD, SUBTRACT, SLEEP, FOR
-    std::uniform_int_distribution<int> typeDist(0, allowNestedInstructions ? 5 : 3);
+    // Instruction types: PRINT, DECLARE, ADD, SUBTRACT, SLEEP, FOR, READ, WRITE
+    std::uniform_int_distribution<int> typeDist(0, allowNestedInstructions ? 7 : 5);
     int instructionType = typeDist(rng);
     
     switch (instructionType) {
@@ -41,6 +41,8 @@ std::string InstructionGenerator::generateRandomInstruction(
         case 3: return generateSubtractInstruction();
         case 4: return generateSleepInstruction();
         case 5: return generateForInstruction();
+        case 6: return generateReadInstruction();
+        case 7: return generateWriteInstruction();
         default: return generatePrintInstruction(processName);
     }
 }
@@ -119,7 +121,7 @@ std::vector<std::string> InstructionGenerator::generateNestedInstructions(int co
     instructions.reserve(count);
     
     for (int i = 0; i < count; ++i) {
-        // Only allow PRINT, DECLARE, ADD, SUBTRACT in nested blocks (no FOR or SLEEP)
+        // Only allow PRINT, DECLARE, ADD, SUBTRACT, READ, WRITE in nested blocks (no FOR or SLEEP)
         instructions.push_back(generateRandomInstruction("nested", false));
     }
     
@@ -147,4 +149,30 @@ int InstructionGenerator::getRandomLoopCount() {
 
 void InstructionGenerator::resetVariableCounter() {
     variableCounter = 0;
+}
+
+std::string InstructionGenerator::generateReadInstruction() {
+    std::string varName = getNextVariableName();
+    uint32_t address = getRandomMemoryAddress();
+    
+    std::stringstream ss;
+    ss << "READ(" << varName << ", 0x" << std::hex << address << ")";
+    return ss.str();
+}
+
+std::string InstructionGenerator::generateWriteInstruction() {
+    uint32_t address = getRandomMemoryAddress();
+    uint16_t value = getRandomUint16();
+    
+    std::stringstream ss;
+    ss << "WRITE(0x" << std::hex << address << ", " << std::dec << value << ")";
+    return ss.str();
+}
+
+uint32_t InstructionGenerator::getRandomMemoryAddress() {
+    // Generate addresses that span multiple pages to force page faults
+    // Use dynamic range based on typical process sizes (256-1024 bytes)
+    // Generate addresses from 0x50 to 0x1FF (80 to 511) to fit within 512-byte processes
+    std::uniform_int_distribution<uint32_t> dist(0x50, 0x1FF); // 80 to 511 (within 512 byte range)
+    return dist(rng);
 }

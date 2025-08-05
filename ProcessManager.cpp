@@ -58,7 +58,7 @@ void ProcessManager::startProcessGeneration() {
         int maxIns = storedConfig->maxIns;
         
         // Sanity check the values - if they seem invalid, use sensible defaults
-        if (freq <= 0 || freq > 10) {
+        if (freq <= 0 || freq > 120) {
             std::cout << "Warning: Invalid batch frequency value (" << freq << "), using default of 1" << std::endl;
             freq = 1;
         }

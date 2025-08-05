@@ -16,10 +16,13 @@ private:
     std::string generateSubtractInstruction();
     std::string generateSleepInstruction();
     std::string generateForInstruction(int nestingLevel = 0);
+    std::string generateReadInstruction();
+    std::string generateWriteInstruction();
     
     std::vector<std::string> generateNestedInstructions(int count);
     
     std::string getNextVariableName();
+    uint32_t getRandomMemoryAddress();
     
     uint16_t getRandomUint16();
     int getRandomSleepTicks();
