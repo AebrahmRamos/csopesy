@@ -354,10 +354,12 @@ std::pair<int, int> MemoryManager::getProcessMemoryMap(int processId) const {
         
         if (startAddress == -1 || endAddress == -1) {
             std::cout << "Warning: No memory blocks found for process ID: " << processId << std::endl;
-        } else {
-            std::cout << "Memory map for process ID " << processId 
-                      << ": start=" << startAddress << ", end=" << endAddress << std::endl;
-        }
+        } 
+        // else 
+        // {
+        //     std::cout << "Memory map for process ID " << processId 
+        //               << ": start=" << startAddress << ", end=" << endAddress << std::endl;
+        // }
     } catch (const std::exception& e) {
         std::cerr << "Exception in getProcessMemoryMap: " << e.what() << std::endl;
         return {-1, -1};

@@ -251,7 +251,7 @@ bool ConsoleManager::validateConfig() {
     }
     
     // Validate Phase 2 parameters
-    if (config.minMemPerProc < 64 || config.minMemPerProc > 65536) {
+    if (config.minMemPerProc < 8 || config.minMemPerProc > 65536) {
         config.errorMessage = "min-mem-per-proc must be between 64 and 65536. Got: " + std::to_string(config.minMemPerProc);
         config.isValid = false;
         return false;

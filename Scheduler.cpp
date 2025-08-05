@@ -237,8 +237,31 @@ void Scheduler::executeProcessRR(std::shared_ptr<Process> process, int coreId) {
 void Scheduler::executeInstruction(std::shared_ptr<Process> process, const std::string& instruction) {
     // Parse and execute the instruction
     if (instruction.find("PRINT(") == 0) {
-        // PRINT instruction - just log it (output will be shown in process-smi)
-        // No additional action needed, instruction is already logged
+        size_t start = instruction.find('(') + 1;
+        size_t end = instruction.find(')', start);
+        if (end != std::string::npos) {
+            std::string content = instruction.substr(start, end - start);
+    
+            // Split by '+'
+            std::stringstream ss(content);
+            std::string segment;
+            bool first = true;
+            while (std::getline(ss, segment, '+')) {
+                // Trim whitespace
+                segment.erase(0, segment.find_first_not_of(" \t"));
+                segment.erase(segment.find_last_not_of(" \t") + 1);
+    
+                // If quoted string
+                if (!segment.empty() && segment.front() == '"' && segment.back() == '"') {
+                    std::cout << segment.substr(1, segment.size() - 2);
+                } else if (!segment.empty()) {
+                    // Variable: print its value
+                    process->ensureVariableExists(segment);
+                    std::cout << process->getVariable(segment);
+                }
+            }
+            std::cout << std::endl;
+        }
     }
     else if (instruction.find("DECLARE(") == 0) {
         // Parse DECLARE(var, value)
