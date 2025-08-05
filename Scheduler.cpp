@@ -7,7 +7,7 @@
 #include <sstream>
 #include <iostream>
 
-Scheduler::Scheduler(ProcessManager* pm) : running(false), activeProcesses(0), processManager(pm),
+Scheduler::Scheduler(ProcessManager* pm) : running(false), generationStopped(false), activeProcesses(0), processManager(pm),
     schedulerType(SchedulerType::FCFS), quantumCycles(5), numCores(1) {}
 
 Scheduler::~Scheduler() {
@@ -23,6 +23,7 @@ void Scheduler::start() {
 
 void Scheduler::stop() {
     running = false;
+    generationStopped = true;
     cv.notify_all();
     for (auto& thread : cpuThreads) {
         if (thread.joinable()) {
@@ -30,6 +31,13 @@ void Scheduler::stop() {
         }
     }
     cpuThreads.clear();
+}
+
+void Scheduler::stopGracefully() {
+    // This method allows current processes to finish but prevents new ones from being queued
+    generationStopped = true;
+    // Don't set running = false - let processes complete naturally
+    // cpuWorker threads will continue until queue is empty
 }
 
 void Scheduler::addProcess(std::shared_ptr<Process> process) {
@@ -287,6 +295,14 @@ void Scheduler::executeInstruction(std::shared_ptr<Process> process, const std::
     else if (instruction.find("FOR(") == 0) {
         // TODO: Implement nested instruction execution
     }
+    else if (instruction.find("READ(") == 0) {
+        // Parse READ(var, address) - Phase 2 instruction
+        executeMemoryInstruction(process, instruction, "READ");
+    }
+    else if (instruction.find("WRITE(") == 0) {
+        // Parse WRITE(address, value) - Phase 2 instruction
+        executeMemoryInstruction(process, instruction, "WRITE");
+    }
 }
 
 void Scheduler::executeArithmeticInstruction(std::shared_ptr<Process> process, const std::string& instruction, const std::string& operation) {
@@ -388,4 +404,105 @@ void Scheduler::requeueProcess(std::shared_ptr<Process> process) {
         }
     }
     cv.notify_one();  // Notify worker thread to pick up a process
+}
+
+// Phase 2: Memory instruction execution
+void Scheduler::executeMemoryInstruction(std::shared_ptr<Process> process, const std::string& instruction, const std::string& operation) {
+    try {
+        if (operation == "READ") {
+            // Parse READ(var, address)
+            auto args = parseInstructionArgs(instruction);
+            if (args.size() < 2) {
+                std::cerr << "Invalid READ instruction format: " << instruction << std::endl;
+                return;
+            }
+            
+            std::string varName = args[0];
+            uint32_t address = parseHexAddress(args[1]);
+            
+            // Read from virtual memory (may trigger page fault)
+            uint16_t value = processManager->readProcessMemory(process->getProcessId(), address);
+            process->setVariable(varName, value);
+            
+            std::cout << "READ: Process " << process->getProcessId() 
+                      << " read value " << value << " from address 0x" 
+                      << std::hex << address << std::dec << " into variable " << varName << std::endl;
+        }
+        else if (operation == "WRITE") {
+            // Parse WRITE(address, value)
+            auto args = parseInstructionArgs(instruction);
+            if (args.size() < 2) {
+                std::cerr << "Invalid WRITE instruction format: " << instruction << std::endl;
+                return;
+            }
+            
+            uint32_t address = parseHexAddress(args[0]);
+            uint16_t value = getValueFromArgument(process, args[1]);
+            
+            // Write to virtual memory (may trigger page fault)
+            processManager->writeProcessMemory(process->getProcessId(), address, value);
+            
+            std::cout << "WRITE: Process " << process->getProcessId() 
+                      << " wrote value " << value << " to address 0x" 
+                      << std::hex << address << std::dec << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Memory instruction error: " << e.what() << std::endl;
+    }
+}
+
+// Helper method to parse hexadecimal addresses
+uint32_t Scheduler::parseHexAddress(const std::string& addressStr) {
+    std::string trimmed = addressStr;
+    
+    // Trim whitespace
+    trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+    trimmed.erase(trimmed.find_last_not_of(" \t") + 1);
+    
+    // Handle hex prefix
+    if (trimmed.find("0x") == 0 || trimmed.find("0X") == 0) {
+        return std::stoul(trimmed, nullptr, 16);
+    } else {
+        // Assume decimal if no hex prefix
+        return std::stoul(trimmed, nullptr, 10);
+    }
+}
+
+// Helper method to parse instruction arguments
+std::vector<std::string> Scheduler::parseInstructionArgs(const std::string& instruction) {
+    std::vector<std::string> args;
+    
+    size_t start = instruction.find('(') + 1;
+    size_t end = instruction.find(')', start);
+    
+    if (end == std::string::npos) {
+        return args; // Invalid format
+    }
+    
+    std::string params = instruction.substr(start, end - start);
+    
+    // Split by comma
+    size_t pos = 0;
+    while (pos < params.length()) {
+        size_t commaPos = params.find(',', pos);
+        std::string arg;
+        
+        if (commaPos == std::string::npos) {
+            arg = params.substr(pos);
+            pos = params.length();
+        } else {
+            arg = params.substr(pos, commaPos - pos);
+            pos = commaPos + 1;
+        }
+        
+        // Trim whitespace
+        arg.erase(0, arg.find_first_not_of(" \t"));
+        arg.erase(arg.find_last_not_of(" \t") + 1);
+        
+        if (!arg.empty()) {
+            args.push_back(arg);
+        }
+    }
+    
+    return args;
 }
