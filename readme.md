@@ -4,7 +4,7 @@
 ## Compilation
 Add niyo nalang other cpp files if ever may madagdag
 ```bash
-g++ -std=c++20 -pthread -o csopesy main.cpp ConsoleManager.cpp ProcessManager.cpp   ProcessGenerator.cpp Process.cpp Scheduler.cpp Screen.cpp ReportGenerator.cpp   InstructionGenerator.cpp MemoryManager.cpp VirtualMemoryManager.cpp
+g++ -std=c++20 -pthread -o csopesy main.cpp ConsoleManager.cpp ProcessManager.cpp   ProcessGenerator.cpp Process.cpp Scheduler.cpp Screen.cpp ReportGenerator.cpp InstructionGenerator.cpp MemoryManager.cpp VirtualMemoryManager.cpp
 ```
 
 ## Running
