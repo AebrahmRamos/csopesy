@@ -98,8 +98,30 @@ void Process::addToExecutionLog(const std::string& instruction) {
 }
 
 // Variable management methods
-void Process::setVariable(const std::string& name, uint16_t value) {
+bool Process::setVariable(const std::string& name, uint16_t value) {
+    // Check if variable already exists
+    if (variables.find(name) != variables.end()) {
+        variables[name] = value;
+        return true;
+    }
+    
+    // Check if we can declare more variables
+    if (!canDeclareMoreVariables()) {
+        return false;  // Silent failure - just return false
+    }
+    
+    // Allocate address in symbol table
+    uint32_t address = allocateVariableAddress();
+    if (address == UINT32_MAX) {
+        return false;  // No space available
+    }
+    
+    // Add variable to symbol table
     variables[name] = value;
+    variableAddresses[name] = address;
+    currentVariableCount++;
+    
+    return true;
 }
 
 uint16_t Process::getVariable(const std::string& name) const {
@@ -122,6 +144,22 @@ void Process::ensureVariableExists(const std::string& name) {
 
 std::map<std::string, uint16_t> Process::getAllVariables() const {
     return variables;
+}
+
+bool Process::canDeclareMoreVariables() const {
+    return currentVariableCount < MAX_VARIABLES;
+}
+
+size_t Process::getVariableCount() const {
+    return currentVariableCount;
+}
+
+uint32_t Process::getVariableAddress(const std::string& name) const {
+    auto it = variableAddresses.find(name);
+    if (it != variableAddresses.end()) {
+        return it->second;
+    }
+    return UINT32_MAX; // Invalid address
 }
 
 // Virtual memory methods for Phase 2
@@ -155,6 +193,10 @@ void Process::writeVirtualMemory(uint32_t virtualAddr, uint16_t value) {
 
 bool Process::isValidVirtualAddress(uint32_t virtualAddr) const {
     return virtualAddr < virtualMemorySize;
+}
+
+bool Process::isSymbolTableAddress(uint32_t virtualAddr) const {
+    return virtualAddr >= SYMBOL_TABLE_BASE_ADDR && virtualAddr < SYMBOL_TABLE_SIZE;
 }
 
 // Execution state methods
@@ -202,4 +244,23 @@ int Process::getMemoryStartAddress() const {
 
 int Process::getMemoryEndAddress() const { 
     return memoryEndAddress; 
+}
+//for   SYMBOL TABLE 
+uint32_t Process::allocateVariableAddress() {
+    if (nextVariableAddress + sizeof(uint16_t) > SYMBOL_TABLE_SIZE) {
+        return UINT32_MAX; 
+    }
+    
+    uint32_t allocated = nextVariableAddress;
+    nextVariableAddress += sizeof(uint16_t); // Move to next 2-byte boundary
+    
+    return allocated;
+}
+
+void Process::initializeSymbolTable() {
+    
+    variables.clear();
+    variableAddresses.clear();
+    currentVariableCount = 0;
+    nextVariableAddress = SYMBOL_TABLE_BASE_ADDR;
 }

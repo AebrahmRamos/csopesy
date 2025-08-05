@@ -750,55 +750,71 @@ void ConsoleManager::processScreenCommand(const std::string& command) {
             std::cout << "PRINT arg cannot be empty." << std::endl;
         }
     }
-    else if (command.find("DECLARE(") != std::string::npos) {
-        std::string declareValue = extractCommandValue(command, "DECLARE");
-        if(declareValue != ""){
-            int commaPos = declareValue.find(',');
-            bool correctArgs = true;
-            if (commaPos != std::string::npos) {
-                std::string var = declareValue.substr(0, commaPos);
-                int spacePos = declareValue.find(' ');
-                std::string temp;
-                if(spacePos != std::string::npos){
-                    temp = declareValue.substr(commaPos + 2);
-                } else {
-                    temp = declareValue.substr(commaPos + 1);
-                }
-                
-                bool isNumber = std::all_of(temp.begin(), temp.end(), ::isdigit);
+    
+else if (command.find("DECLARE(") != std::string::npos) {
+    // Enhanced DECLARE with Symbol Table enforcement
+    std::string declareValue = extractCommandValue(command, "DECLARE");
+    if(declareValue != ""){
+        int commaPos = declareValue.find(',');
+        bool correctArgs = true;
+        if (commaPos != std::string::npos) {
+            std::string var = declareValue.substr(0, commaPos);
+            int spacePos = declareValue.find(' ');
+            std::string temp;
+            if(spacePos != std::string::npos){
+                temp = declareValue.substr(commaPos + 2);
+            } else {
+                temp = declareValue.substr(commaPos + 1);
+            }
+            
+            bool isNumber = std::all_of(temp.begin(), temp.end(), ::isdigit);
 
-                uint16_t value;
-                if(isNumber){
-                    int conTemp = std::stoi(temp);
-                    if (conTemp < 0 || conTemp > 65535) {
-                        std::cout << "Value out of range for uint16_t." << std::endl;
-                        correctArgs = false;
-                    } else {
-                        value = static_cast<uint16_t>(conTemp);
-                    }
-                }
-                else {
+            uint16_t value;
+            if(isNumber){
+                int conTemp = std::stoi(temp);
+                if (conTemp < 0 || conTemp > 65535) {
+                    std::cout << "Value out of range for uint16_t." << std::endl;
                     correctArgs = false;
+                } else {
+                    value = static_cast<uint16_t>(conTemp);
                 }
+            }
+            else {
+                correctArgs = false;
+            }
 
-                if (correctArgs == true){
+            if (correctArgs == true){
+                // Get attached process for symbol table enforcement
+                auto process = currentScreen->getAttachedProcess();
+                if (process) {
+                    if (process->setVariable(var, value)) {
+                        std::cout << "Variable '" << var << "' declared with value " << value << std::endl;
+                        currentScreen->simulateProgress();
+                        std::cout << "Command completed. Progress updated." << std::endl;
+                        currentScreen->display();
+                    } else {
+                        std::cout << "DECLARE failed: Symbol table full. Cannot declare more than 32 variables." << std::endl;
+                    }
+                } else {
+                    // Fallback to old method if no process attached
                     declaredVariables[var] = value;
                     std::cout << "Variable '" << var << "' declared with value " << value << std::endl;
                     currentScreen->simulateProgress();
                     std::cout << "Command completed. Progress updated." << std::endl;
                     currentScreen->display();
                 }
-                else {
-                    std::cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << std::endl;
-                }
-            } 
+            }
             else {
                 std::cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << std::endl;
             }
-        } else{
-            std::cout << "DECLARE arg cannot be empty."<< std::endl;
+        } 
+        else {
+            std::cout << "Wrong args for DECLARE. Must be DECLARE(var, value), where value must be a uint16 number (0 - 65535)." << std::endl;
         }
+    } else{
+        std::cout << "DECLARE arg cannot be empty."<< std::endl;
     }
+}
     else if (command.find("ADD(") != std::string::npos) {
         std::string addValues = extractCommandValue(command, "ADD");
         if(addValues != ""){
